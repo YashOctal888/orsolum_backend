@@ -178,7 +178,11 @@ export const registerUser = async (req, res) => {
         const { phone, otp, state, city, name } = req.body;
 
         if (!phone || !otp || !state || !city || !name) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: `Please enter details` });
+            return res.status(status.BadRequest).json({
+                success: false,
+                status: jsonStatus.BadRequest,
+                message: `Please enter details`
+            });
         }
 
         const otpRecord = await OtpModel.findOne({ phone, otp, expiresAt: { $gt: Date.now() } });

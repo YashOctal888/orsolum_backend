@@ -1952,6 +1952,9 @@ export const getLocalStoreHomePageDataV2 = async (req, res) => {
         const long = req.body?.long ?? req.query?.long;
         const city = req.body?.city ?? req.query?.city;
         const area = req.body?.area ?? req.query?.area; // New area parameter
+
+        console.log(req.body,"req.body")
+        console.log(req.query,"req.query")
         const userDetails = await User.findById(req.user._id).select("lat long city state address");
 
         const parsedLat = lat !== undefined && lat !== null && lat !== "" ? parseFloat(lat) : null;
@@ -1964,6 +1967,7 @@ export const getLocalStoreHomePageDataV2 = async (req, res) => {
         // This ensures when user changes location, new data is fetched immediately
         let locationChanged = false; // Track if location was changed in this request
         if (Number.isFinite(parsedLat) && Number.isFinite(parsedLong)) {
+            console.log(1)
             // Check if location actually changed
             const previousLat = userDetails?.lat ? parseFloat(userDetails.lat) : null;
             const previousLong = userDetails?.long ? parseFloat(userDetails.long) : null;
@@ -1996,6 +2000,7 @@ export const getLocalStoreHomePageDataV2 = async (req, res) => {
                 console.warn("Failed to update user location:", err.message);
             });
         } else if (userDetails?.lat && userDetails?.long) {
+            console.log(2)
             // Fallback to saved location only if no new coordinates provided
             const savedLat = parseFloat(userDetails.lat);
             const savedLong = parseFloat(userDetails.long);
@@ -2005,11 +2010,11 @@ export const getLocalStoreHomePageDataV2 = async (req, res) => {
             }
         }
 
-        // ✅ Priority: Use city/area from request first (for location refresh)
-        const searchCity =
-            (city && city.trim()) ||
-            (userDetails?.city ? userDetails.city.trim() : "");
+        console.log(searchLat, searchLong,"searchLat, searchLong");
 
+        // ✅ Priority: Use city/area from request first (for location refresh)
+        const searchCity = (city && city.trim()) || (userDetails?.city ? userDetails.city.trim() : "");
+        console.log(searchCity,"searchCity")
         // Extract area from parameter first, then user address
         let searchArea = null;
         if (area && area.trim()) {
@@ -2017,7 +2022,7 @@ export const getLocalStoreHomePageDataV2 = async (req, res) => {
         } else if (userDetails?.address) {
             searchArea = extractAreaFromAddress(userDetails.address);
         }
-
+        console.log(searchArea,"searchArea")
         // Fetch categories - respect location filtering and return empty if no stores exist in location
         let categories = [];
         let popularCategories = [];

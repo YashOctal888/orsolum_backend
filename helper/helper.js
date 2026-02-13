@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { jsonStatus, status } from '../helper/api.responses.js';
 import Order from '../models/Order.js';
 import OnlineOrder from '../models/OnlineStore/OnlineOrder.js';
@@ -761,5 +762,29 @@ export const handleAdPaymentCallback = async (webhookCallRes) => {
             },
         });
         return false;
+    }
+};
+
+export const dbConnectionStart = async () => {
+    try {
+        if (!process.env.MONGO_URI) {
+            throw new Error("MONGODB_URI is not defined in environment variables");
+        }
+
+        await mongoose.connect(process.env.MONGO_URI);
+
+        console.log("✅ MongoDB connected");
+    } catch (error) {
+        console.error("❌ MongoDB connection failed:", error);
+        process.exit(1); // optional: crash app if DB fails
+    }
+};
+
+export const dbConnectionEnd = async () => {
+    try {
+        await mongoose.disconnect();
+        console.log("🛑 MongoDB disconnected");
+    } catch (error) {
+        console.error("❌ Error while disconnecting MongoDB:", error);
     }
 };

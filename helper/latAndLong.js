@@ -26,13 +26,32 @@ export const processGoogleMapsLink = async (url) => {
     };
 
     const extractLatLng = (url) => {
-      // Match both ?q=lat,lng and @lat,lng patterns
-      const regex = /[?@](-?\d+\.\d+),\s*(-?\d+\.\d+)/;
-      const match = url.match(regex);
-      if (match) {
-        return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+      try {
+        const decoded = decodeURIComponent(url);
+
+        // Pattern 1: @lat,lng
+        let match = decoded.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (match) {
+          return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+        }
+
+        // Pattern 2: ?q=lat,lng or ?query=lat,lng
+        match = decoded.match(/[?&](?:q|query)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (match) {
+          return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+        }
+
+        // Pattern 3: /place/lat,lng   ⭐ THIS FIXES YOUR CASE
+        match = decoded.match(/\/place\/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (match) {
+          return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+        }
+
+        return null;
+      } catch (err) {
+        console.error("LatLng extract error:", err);
+        return null;
       }
-      return null;
     };
 
     const extractSearchQuery = (url) => {

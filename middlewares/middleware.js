@@ -249,66 +249,58 @@ export const adminAuthentication = async (req, res, next) => {
 
 /* ------------------------- SUPERADMIN AUTHENTICATION -------------------- */
 export const superadminAuthentication = async (req, res, next) => {
+  console.log("🔐 Auth middleware hit");
+
   try {
-    const token = extractToken(req);
-    if (!token) {
-      return res.status(status.Unauthorized).json({
-        status: jsonStatus.Unauthorized,
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ Missing Bearer token");
+      return res.status(401).json({
         success: false,
-        message: "No Token. Authorization Denied",
+        message: "Authorization token missing",
       });
     }
+
+    const token = authHeader.split(" ")[1];
 
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
-      // Provide specific error messages for token issues
-      if (jwtError.name === "TokenExpiredError") {
-        return res.status(status.Unauthorized).json({
-          status: jsonStatus.Unauthorized,
-          success: false,
-          message: "Token expired",
-        });
-      }
-      if (jwtError.name === "JsonWebTokenError") {
-        return res.status(status.Unauthorized).json({
-          status: jsonStatus.Unauthorized,
-          success: false,
-          message: "Invalid token",
-        });
-      }
-      return res.status(status.Unauthorized).json({
-        status: jsonStatus.Unauthorized,
+    } catch (err) {
+      console.log("❌ JWT error:", err.message);
+      return res.status(401).json({
         success: false,
         message: "Invalid or expired token",
       });
     }
 
-    const admin = await Admin.findById(decoded._id);
-    if (!admin) {
-      return res.status(status.Unauthorized).json({
-        status: jsonStatus.Unauthorized,
-        success: false,
-        message: "Authorization Denied",
-      });
-    }
+    const admin = await Admin.findById(decoded._id)
+        .select("_id name email role createdAt")
+        .populate("role", "name permissions")
+        .lean();
 
-    // Check if admin has superadmin role
-    if (admin.role !== "superadmin") {
-      return res.status(status.Forbidden).json({
-        status: jsonStatus.Forbidden,
+    if (!admin) {
+      console.log("❌ Admin not found");
+      return res.status(401).json({
         success: false,
-        message: "Access Denied. Superadmin privileges required.",
+        message: "Unauthorized",
       });
     }
 
     req.user = admin;
+    console.log("✅ Auth passed");
     next();
+
   } catch (error) {
-    catchError("superadminAuthentication", error, req, res);
+    console.error("🔥 Auth middleware fatal error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Authentication failed",
+    });
   }
 };
+
 
 
 /* ------------------------- DELIVERY BOY AUTHENTICATION -------------------- */

@@ -50,34 +50,36 @@ import {
   listAdmins,
   updateAdminPassword,
   deleteAdmin
-  
 } from "../controllers/adminController.js";
 import { superadminAuthentication, userAuthentication } from "../middlewares/middleware.js";
 import { createWorkHours, getAllWorkHours, updateWorkHours, deleteWorkHours } from "../controllers/workHoursController.js";
 import { createNotification, listNotifications, deleteNotification } from "../controllers/notificationController.js";
-import { createSuperAdmin, loginSuperadmin } from "../controllers/superadminController.js";
-
+import {
+  loginSuperadmin,
+  me,
+  staffMembers,
+  createStaffMember,
+  getPaymentConfigurations,
+  savePaymentConfigurations
+} from "../controllers/superadminController.js";
+import RolePermissionController from "../controllers/RolePermissionController.js";
+import CategoryController from "../controllers/CategoryController.js";
 const superadminRouter = express.Router();
-// console.log("🚀 superadminRouter loaded");
-//creat superadmin
-superadminRouter.post("/create/superadmin", createSuperAdmin);
-// superadminRouter.get("/test/super", (req, res) => {
-//   res.send("Superadmin Router Loaded");
-// });
-
 
 
 // Superadmin Authentication
 superadminRouter.post('/login/superadmin/v1', loginSuperadmin);
+superadminRouter.get('/superadmin/me/v1',superadminAuthentication,me)
 
-
-//create admin
-
-superadminRouter.post(
-  "/superadmin/create/admin/v1",
-  superadminAuthentication,
-  createAdmin
-);
+// Role and Permissions
+superadminRouter.get("/superadmin/staff-members", superadminAuthentication, staffMembers);
+superadminRouter.post("/superadmin/create/staff-member", superadminAuthentication, createStaffMember);
+superadminRouter.get("/superadmin/roles", superadminAuthentication, RolePermissionController.roles)
+superadminRouter.get("/superadmin/role/:id", superadminAuthentication, RolePermissionController.getRoleById);
+superadminRouter.post("/superadmin/role/create", superadminAuthentication, RolePermissionController.createRole)
+superadminRouter.put("/superadmin/role/:id", superadminAuthentication, RolePermissionController.updateRole);
+superadminRouter.delete("/superadmin/roles/:id",superadminAuthentication, RolePermissionController.deleteRole);
+superadminRouter.get("/superadmin/permissions", superadminAuthentication, RolePermissionController.permissions)
 
 
 // Admin Management (Superadmin Only)
@@ -86,14 +88,15 @@ superadminRouter.put("/superadmin/update/admin/password/:id/v1", superadminAuthe
 superadminRouter.delete("/superadmin/delete/admin/:id/v1", superadminAuthentication, deleteAdmin);
 
 // Store Categories
+
 superadminRouter.post('/superadmin/upload/store/category/image/v1', [
   body('sFileName').not().isEmpty(),
   body('sContentType').not().isEmpty()
 ], superadminAuthentication, uploadStoreCategoryImage);
-superadminRouter.post('/superadmin/create/store/category/v1', superadminAuthentication, createStoreCategory);
-superadminRouter.put('/superadmin/edit/store/category/:id/v1', superadminAuthentication, editStoreCategory);
-superadminRouter.delete('/superadmin/delete/store/category/:id/v1', superadminAuthentication, deleteStoreCategory);
-superadminRouter.get('/superadmin/list/store/category/v1', superadminAuthentication, listStoreCategory);
+superadminRouter.get('/superadmin/list/store/category/v1', superadminAuthentication, CategoryController.index);
+superadminRouter.post('/superadmin/create/store/category/v1', superadminAuthentication, CategoryController.store);
+superadminRouter.put('/superadmin/edit/store/category/:id/v1', superadminAuthentication, CategoryController.update);
+superadminRouter.delete('/superadmin/delete/store/category/:id/v1', superadminAuthentication, CategoryController.destroy);
 
 // Store Management
 superadminRouter.get('/superadmin/list/store/v1', superadminAuthentication, listStores);
@@ -130,6 +133,8 @@ superadminRouter.post('/superadmin/user/inactice/:id/v1', superadminAuthenticati
 // Payment Management
 superadminRouter.get('/superadmin/payments/v1', superadminAuthentication, listPayments);
 superadminRouter.get('/superadmin/payment/details/:id/v1', superadminAuthentication, paymentDetails);
+superadminRouter.get('/superadmin/payment/configurations/v1', superadminAuthentication, getPaymentConfigurations);
+superadminRouter.post('/superadmin/payment/configurations/v1', superadminAuthentication, savePaymentConfigurations);
 
 // Order Management
 superadminRouter.get('/superadmin/local-store/orders/v1', superadminAuthentication, listLocalStoreOrders);

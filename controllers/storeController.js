@@ -13,6 +13,7 @@ import { signedUrl } from '../helper/s3.config.js';
 import { processGoogleMapsLink } from '../helper/latAndLong.js';
 import PickupAddress from '../models/PickupAddress.js';
 import ShiprocketService from '../helper/shiprocketService.js';
+import Category from "../models/Category.js";
 
 let limit = process.env.LIMIT;
 limit = limit ? Number(limit) : 10;
@@ -1376,65 +1377,58 @@ export const deleteStoreImage = async (req, res) => {
 };
 
 export const listOfCategories = async (req, res) => {
-    try {
+  try {
+    const { query: { type } } = req;
 
-        // Retailer store uses 'local' store categories.
-        // Seller store: return ALL available store categories (online + local) so dropdown never stays empty.
-        const storeTypeMatch =
-            req?.user?.role === "seller"
-                ? { $in: ["online", "local"] }
-                : "local";
-
-        let listCategories = await StoreCategory.aggregate([
-            {
-                $match: {
-                    deleted: false,
-                    storeType: storeTypeMatch
-                }
-            }
-        ]);
-
-        // If seller has no store categories yet, auto-seed from online store categories
-        if (req?.user?.role === "seller" && (!listCategories || listCategories.length === 0)) {
-            const onlineCats = await OnlineStoreCategory.find({ deleted: false })
-                .select("name image")
-                .lean();
-
-            if (onlineCats && onlineCats.length) {
-                const bulk = onlineCats.map((c) => ({
-                    updateOne: {
-                        filter: { name: c.name, storeType: "online" },
-                        update: {
-                            $setOnInsert: {
-                                name: c.name,
-                                image: c.image,
-                                storeType: "online",
-                                deleted: false,
-                                createdBy: req.user._id,
-                                updatedBy: req.user._id
-                            }
-                        },
-                        upsert: true
-                    }
-                }));
-                await StoreCategory.bulkWrite(bulk, { ordered: false });
-
-                listCategories = await StoreCategory.aggregate([
-                    {
-                        $match: {
-                            deleted: false,
-                            storeType: storeTypeMatch
-                        }
-                    }
-                ]);
-            }
-        }
-
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: listCategories });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('listOfCategories', error, req, res);
+    if (!type || !["local", "online"].includes(type)) {
+      return res.status(status.BadRequest).json({
+        status: jsonStatus.BadRequest,
+        success: false,
+        message: "Invalid or missing type. Allowed values: local, online"
+      });
     }
+
+
+    const categories = await Category.aggregate([
+      {
+        $match: { type }
+      },
+      {
+        $group: {
+          _id: "$category_name",
+          categoryId: { $first: "$_id" },
+          sub_categories: {
+            $push: {
+              id: "$_id",
+              name: "$sub_category_name"
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          id: "$categoryId",
+          name: "$_id",
+          sub_categories: 1
+        }
+      }
+    ]);
+
+    res.status(status.OK).json({
+      status: jsonStatus.OK,
+      success: true,
+      data: categories
+    });
+
+  } catch (error) {
+    res.status(status.InternalServerError).json({
+      status: jsonStatus.InternalServerError,
+      success: false,
+      message: error.message
+    });
+    return catchError('listOfCategories', error, req, res);
+  }
 };
 
 export const saveAllOffers = async (req, res) => {

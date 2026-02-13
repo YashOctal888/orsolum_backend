@@ -331,10 +331,10 @@ export const listStores = async (req, res) => {
         }
 
         pipeline.push({
-            $sort: {
-                createdAt: -1
-            }
-        },
+                $sort: {
+                    createdAt: -1
+                }
+            },
             {
                 $lookup: {
                     from: "store_categories",
@@ -347,7 +347,7 @@ export const listStores = async (req, res) => {
                 $addFields: {
                     category_name: {
                         $ifNull: [
-                            { $arrayElemAt: ["$category_name.name", 0] },
+                            {$arrayElemAt: ["$category_name.name", 0]},
                             null
                         ]
                     }
@@ -361,14 +361,14 @@ export const listStores = async (req, res) => {
                     as: "storeCreator",
                     pipeline: [
                         {
-                            $project: { role: 1 }
+                            $project: {role: 1}
                         }
                     ]
                 }
             },
             {
                 $addFields: {
-                    creatorRole: { $arrayElemAt: ["$storeCreator.role", 0] }
+                    creatorRole: {$arrayElemAt: ["$storeCreator.role", 0]}
                 }
             });
 
@@ -380,6 +380,8 @@ export const listStores = async (req, res) => {
                 }
             });
         }
+
+        console.log(pipeline);
 
         const list = await Store.aggregate(pipeline);
 
