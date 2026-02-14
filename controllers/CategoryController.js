@@ -1,20 +1,22 @@
-import Category from "../models/Category.js";
-import { createCategorySchema } from "../validations/category.validator.js";
+import ProductCategory from "../models/OnlineStore/Category.js";
+import ProductSubCategory from "../models/OnlineStore/SubCategory.js";
+import { createCategorySchema, createSubCategorySchema } from "../validations/category.validator.js";
+
+// ─── Parent Category CRUD ────────────────────────────────────────
 
 const index = async (req, res) => {
     try {
         const { search = "", type = "online" } = req.query;
 
         const query = {
-            type,
-            $or: [
-                { category_name: { $regex: search, $options: "i" } },
-                { sub_category_name: { $regex: search, $options: "i" } },
-            ],
+            deleted: { $ne: true },
+            storeType: type,
         };
+        if (search) {
+            query.name = { $regex: search, $options: "i" };
+        }
 
-        const categories = await Category.find(query)
-            .sort({ createdAt: -1 });
+        const categories = await ProductCategory.find(query).sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
@@ -38,27 +40,26 @@ const store = async (req, res) => {
             });
         }
 
-        const { category_name, sub_category_name, image, type } = value;
+        const { name, image, type } = value;
 
-        const exists = await Category.findOne({
-            category_name: new RegExp(`^${category_name}$`, "i"),
-            sub_category_name: new RegExp(`^${sub_category_name}$`, "i"),
-            type,
+        const exists = await ProductCategory.findOne({
+            name: new RegExp(`^${name}$`, "i"),
+            storeType: type,
+            deleted: { $ne: true },
         });
 
         if (exists) {
             return res.status(409).json({
                 success: false,
-                message: "Category with this sub-category already exists",
+                message: "Category with this name already exists",
             });
         }
 
-        const category = await Category.create({
-            user_id: req.user._id, // assuming superadmin auth
-            category_name,
-            sub_category_name,
+        const category = await ProductCategory.create({
+            createdBy: req.user._id,
+            name,
             image,
-            type,
+            storeType: type,
         });
 
         return res.status(201).json({
@@ -76,7 +77,10 @@ const store = async (req, res) => {
 
 const show = async (req, res) => {
     try {
-        const category = await Category.findById(req.params.id);
+        const category = await ProductCategory.findOne({
+            _id: req.params.id,
+            deleted: { $ne: true },
+        });
 
         if (!category) {
             return res.status(404).json({
@@ -85,9 +89,15 @@ const show = async (req, res) => {
             });
         }
 
+        // Also fetch subcategories
+        const subCategories = await ProductSubCategory.find({
+            categoryId: category._id,
+            deleted: { $ne: true },
+        }).sort({ createdAt: -1 });
+
         return res.status(200).json({
             success: true,
-            data: category,
+            data: { ...category.toObject(), subCategories },
         });
     } catch (error) {
         return res.status(500).json({
@@ -107,9 +117,12 @@ const update = async (req, res) => {
             });
         }
 
-        const { category_name, sub_category_name, image, type } = value;
+        const { name, image, type } = value;
 
-        const category = await Category.findById(req.params.id);
+        const category = await ProductCategory.findOne({
+            _id: req.params.id,
+            deleted: { $ne: true },
+        });
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -117,24 +130,23 @@ const update = async (req, res) => {
             });
         }
 
-        const exists = await Category.findOne({
+        const exists = await ProductCategory.findOne({
             _id: { $ne: req.params.id },
-            category_name: new RegExp(`^${category_name}$`, "i"),
-            sub_category_name: new RegExp(`^${sub_category_name}$`, "i"),
-            type,
+            name: new RegExp(`^${name}$`, "i"),
+            storeType: type,
+            deleted: { $ne: true },
         });
 
         if (exists) {
             return res.status(409).json({
                 success: false,
-                message: "Category with this sub-category already exists",
+                message: "Category with this name already exists",
             });
         }
 
-        category.category_name = category_name;
-        category.sub_category_name = sub_category_name;
+        category.name = name;
         category.image = image;
-        category.type = type;
+        category.storeType = type;
 
         await category.save();
 
@@ -151,10 +163,12 @@ const update = async (req, res) => {
     }
 };
 
-
 const destroy = async (req, res) => {
     try {
-        const category = await Category.findById(req.params.id);
+        const category = await ProductCategory.findOne({
+            _id: req.params.id,
+            deleted: { $ne: true },
+        });
 
         if (!category) {
             return res.status(404).json({
@@ -163,7 +177,14 @@ const destroy = async (req, res) => {
             });
         }
 
-        await category.deleteOne();
+        // Soft delete parent and all its subcategories
+        category.deleted = true;
+        await category.save();
+
+        await ProductSubCategory.updateMany(
+            { categoryId: category._id },
+            { $set: { deleted: true } }
+        );
 
         return res.status(200).json({
             success: true,
@@ -177,10 +198,189 @@ const destroy = async (req, res) => {
     }
 };
 
+// ─── SubCategory CRUD ────────────────────────────────────────────
+
+const listSubCategories = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { search = "" } = req.query;
+
+        const query = {
+            categoryId,
+            deleted: { $ne: true },
+        };
+        if (search) {
+            query.name = { $regex: search, $options: "i" };
+        }
+
+        const subCategories = await ProductSubCategory.find(query).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            data: subCategories,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch sub-categories",
+        });
+    }
+};
+
+const storeSubCategory = async (req, res) => {
+    try {
+        const { error, value } = createSubCategorySchema.validate(req.body);
+        if (error) {
+            return res.status(422).json({
+                success: false,
+                message: error.details[0].message,
+            });
+        }
+
+        const { name, image, categoryId, type } = value;
+
+        // Verify parent exists
+        const parent = await ProductCategory.findOne({
+            _id: categoryId,
+            deleted: { $ne: true },
+        });
+        if (!parent) {
+            return res.status(404).json({
+                success: false,
+                message: "Parent category not found",
+            });
+        }
+
+        const exists = await ProductSubCategory.findOne({
+            name: new RegExp(`^${name}$`, "i"),
+            categoryId,
+            storeType: type,
+            deleted: { $ne: true },
+        });
+
+        if (exists) {
+            return res.status(409).json({
+                success: false,
+                message: "Sub-category with this name already exists under this category",
+            });
+        }
+
+        const subCategory = await ProductSubCategory.create({
+            createdBy: req.user._id,
+            name,
+            image,
+            categoryId,
+            storeType: type,
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Sub-category created successfully",
+            data: subCategory,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to create sub-category",
+        });
+    }
+};
+
+const updateSubCategory = async (req, res) => {
+    try {
+        const { error, value } = createSubCategorySchema.validate(req.body);
+        if (error) {
+            return res.status(422).json({
+                success: false,
+                message: error.details[0].message,
+            });
+        }
+
+        const { name, image, categoryId, type } = value;
+
+        const subCategory = await ProductSubCategory.findOne({
+            _id: req.params.id,
+            deleted: { $ne: true },
+        });
+        if (!subCategory) {
+            return res.status(404).json({
+                success: false,
+                message: "Sub-category not found",
+            });
+        }
+
+        const exists = await ProductSubCategory.findOne({
+            _id: { $ne: req.params.id },
+            name: new RegExp(`^${name}$`, "i"),
+            categoryId,
+            storeType: type,
+            deleted: { $ne: true },
+        });
+
+        if (exists) {
+            return res.status(409).json({
+                success: false,
+                message: "Sub-category with this name already exists under this category",
+            });
+        }
+
+        subCategory.name = name;
+        subCategory.image = image;
+        subCategory.categoryId = categoryId;
+        subCategory.storeType = type;
+
+        await subCategory.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Sub-category updated successfully",
+            data: subCategory,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update sub-category",
+        });
+    }
+};
+
+const destroySubCategory = async (req, res) => {
+    try {
+        const subCategory = await ProductSubCategory.findOne({
+            _id: req.params.id,
+            deleted: { $ne: true },
+        });
+
+        if (!subCategory) {
+            return res.status(404).json({
+                success: false,
+                message: "Sub-category not found",
+            });
+        }
+
+        subCategory.deleted = true;
+        await subCategory.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Sub-category deleted successfully",
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to delete sub-category",
+        });
+    }
+};
+
 export default {
     index,
     store,
     show,
     update,
     destroy,
+    listSubCategories,
+    storeSubCategory,
+    updateSubCategory,
+    destroySubCategory,
 };

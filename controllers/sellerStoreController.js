@@ -17,7 +17,7 @@ const { ObjectId } = mongoose.Types;
 
 export const createSellerStore = async (req, res) => {
   try {
-    const { name, category, information, phone, address, email, directMe, city, state, pincode } = req.body;
+    const { name, category, subCategory, information, phone, address, email, directMe, city, state, pincode } = req.body;
 
     if (!name || !category || !information || !phone || !address || !email) {
       return res.status(400).json({ success: false, message: "All store details are required" });
@@ -37,14 +37,15 @@ export const createSellerStore = async (req, res) => {
     }
 
     // 📸 Handle images from multer
-    const images = req.files && req.files.length > 0 
-      ? req.files.map(file => file.key) 
+    const images = req.files && req.files.length > 0
+      ? req.files.map(file => file.key)
       : [];
 
     // 🏪 Create Store in DB
     const newStore = await Store.create({
       name,
       category,
+      subCategory: subCategory || null,
       information,
       phone,
       address,
@@ -248,6 +249,7 @@ export const getSellerStoreDetails = async (req, res) => {
   try {
     const store = await Store.findOne({ createdBy: req.user._id })
       .populate("category", "name")
+      .populate("subCategory", "name")
       .lean();
 
     if (!store) {
@@ -312,7 +314,7 @@ export const getSellerStoreDetails = async (req, res) => {
     // Check if store category is automobile
     const categoryName = store.category?.name || "";
     const isAutomobile = isAutomobileCategory(categoryName);
-    
+
     // 🔍 Fetch pickup addresses if pickup_address_id exists but pickup_addresses is empty
     let pickupAddressesData = [];
     if (store.shiprocket?.pickup_address_id && (!store.shiprocket?.pickup_addresses || store.shiprocket.pickup_addresses.length === 0)) {
@@ -321,12 +323,12 @@ export const getSellerStoreDetails = async (req, res) => {
         const dbPickupAddresses = await PickupAddress.find({ storeId: store._id })
           .select('-__v')
           .lean();
-        
+
         if (dbPickupAddresses.length > 0) {
           // Use database pickup addresses
           pickupAddressesData = dbPickupAddresses;
           console.log("✅ Found pickup addresses in database:", dbPickupAddresses.length);
-          
+
           // Update store with pickup_addresses if not already set
           if (!store.shiprocket.pickup_addresses || store.shiprocket.pickup_addresses.length === 0) {
             await Store.findByIdAndUpdate(store._id, {
@@ -341,11 +343,11 @@ export const getSellerStoreDetails = async (req, res) => {
           console.log("🔍 No pickup addresses in database, fetching from Shiprocket...");
           try {
             const shiprocketPickupId = store.shiprocket.pickup_address_id;
-            
+
             // Fetch specific pickup address from Shiprocket
             const shiprocketResponse = await ShiprocketService.getPickupAddressById(shiprocketPickupId);
             const shiprocketPickupData = shiprocketResponse?.data || shiprocketResponse;
-            
+
             if (shiprocketPickupData) {
               // Create a pickup address object from Shiprocket data
               const pickupAddressFromShiprocket = {
@@ -376,7 +378,7 @@ export const getSellerStoreDetails = async (req, res) => {
                 createdAt: new Date(),
                 updatedAt: new Date()
               };
-              
+
               pickupAddressesData = [pickupAddressFromShiprocket];
               console.log("✅ Fetched pickup address from Shiprocket:", shiprocketPickupId);
             } else {
@@ -439,26 +441,26 @@ export const getSellerStoreDetails = async (req, res) => {
       }
     } else if (store.shiprocket?.pickup_addresses && store.shiprocket.pickup_addresses.length > 0) {
       // If pickup_addresses array exists, populate them
-      const pickupIds = store.shiprocket.pickup_addresses.map(addr => 
+      const pickupIds = store.shiprocket.pickup_addresses.map(addr =>
         typeof addr === 'object' ? addr._id || addr : addr
       ).filter(Boolean);
-      
+
       if (pickupIds.length > 0) {
         pickupAddressesData = await PickupAddress.find({ _id: { $in: pickupIds } })
           .select('-__v')
           .lean();
       }
     }
-    
+
     // Ensure shiprocket structure exists
     if (!store.shiprocket) {
       store.shiprocket = {};
     }
-    
+
     // Add pickup_addresses_data to response
     store.shiprocket.pickup_addresses_data = pickupAddressesData;
     store.shiprocket.pickup_addresses_ids = pickupAddressesData.map(addr => addr._id);
-    
+
     return res.status(status.OK).json({
       status: jsonStatus.OK,
       success: true,
@@ -483,7 +485,7 @@ export const getSellerStoreDetails = async (req, res) => {
 
 export const updateSellerStore = async (req, res) => {
   try {
-    const { name, category, information, phone, address, email, directMe, city, state, pincode } =
+    const { name, category, subCategory, information, phone, address, email, directMe, city, state, pincode } =
       req.body;
 
     const store = await Store.findOne({ createdBy: req.user._id });
@@ -498,22 +500,22 @@ export const updateSellerStore = async (req, res) => {
     // Helper function to parse address and extract city, state, pincode
     const parseAddress = (addressString) => {
       if (!addressString) return { city: "", state: "", pincode: "" };
-      
+
       // Try to extract pincode (6 digits, usually at the end)
       const pincodeMatch = addressString.match(/\b(\d{6})\b/);
       const extractedPincode = pincodeMatch ? pincodeMatch[1] : "";
-      
+
       // Common Indian states (case insensitive)
-      const states = ["Gujarat", "Maharashtra", "Delhi", "Karnataka", "Tamil Nadu", "West Bengal", 
-                     "Rajasthan", "Uttar Pradesh", "Madhya Pradesh", "Punjab", "Haryana", 
-                     "Bihar", "Odisha", "Andhra Pradesh", "Telangana", "Kerala", "Assam",
-                     "Jharkhand", "Chhattisgarh", "Himachal Pradesh", "Uttarakhand", "Goa",
-                     "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Tripura", "Sikkim",
-                     "Arunachal Pradesh", "Jammu and Kashmir", "Ladakh"];
-      
+      const states = ["Gujarat", "Maharashtra", "Delhi", "Karnataka", "Tamil Nadu", "West Bengal",
+        "Rajasthan", "Uttar Pradesh", "Madhya Pradesh", "Punjab", "Haryana",
+        "Bihar", "Odisha", "Andhra Pradesh", "Telangana", "Kerala", "Assam",
+        "Jharkhand", "Chhattisgarh", "Himachal Pradesh", "Uttarakhand", "Goa",
+        "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Tripura", "Sikkim",
+        "Arunachal Pradesh", "Jammu and Kashmir", "Ladakh"];
+
       let extractedState = "";
       let extractedCity = "";
-      
+
       // Try to find state in address (case insensitive)
       const addressLower = addressString.toLowerCase();
       for (const stateName of states) {
@@ -522,7 +524,7 @@ export const updateSellerStore = async (req, res) => {
           break;
         }
       }
-      
+
       // Common Indian cities (expandable list)
       const allCities = [
         // Gujarat
@@ -543,7 +545,7 @@ export const updateSellerStore = async (req, res) => {
         "Lucknow", "Kanpur", "Agra", "Varanasi", "Allahabad",
         // And more...
       ];
-      
+
       // Try to find city in address (case insensitive, check before state to avoid false matches)
       for (const cityName of allCities) {
         if (addressLower.includes(cityName.toLowerCase())) {
@@ -551,7 +553,7 @@ export const updateSellerStore = async (req, res) => {
           break;
         }
       }
-      
+
       return {
         city: extractedCity,
         state: extractedState,
@@ -562,6 +564,7 @@ export const updateSellerStore = async (req, res) => {
     // Update fields first
     store.name = name ?? store.name;
     store.category = category ?? store.category;
+    store.subCategory = subCategory !== undefined ? (subCategory || null) : store.subCategory;
     store.information = information ?? store.information;
     store.phone = phone ?? store.phone;
     store.address = address ?? store.address;
@@ -582,19 +585,19 @@ export const updateSellerStore = async (req, res) => {
 
     // 🚀 Always try to create/update Shiprocket pickup address if we have address data
     // Update if address, city, state, or pincode was updated
-    const addressWasUpdated = (address && address !== store.address) || 
-                              (city && city !== (store.shiprocket?.pickup_location?.city || "")) ||
-                              (state && state !== (store.shiprocket?.pickup_location?.state || "")) ||
-                              (pincode && pincode !== (store.shiprocket?.pickup_location?.pincode || ""));
-    
-    const shouldUpdateShiprocket = (address || store.address) && 
-                                   (name || store.name) && 
-                                   (phone || store.phone) &&
-                                   (finalCity && finalState && finalPincode) &&
-                                   (addressWasUpdated || !store.shiprocket?.pickup_address_id || 
-                                    !store.shiprocket?.pickup_location?.city || 
-                                    !store.shiprocket?.pickup_location?.state ||
-                                    !store.shiprocket?.pickup_location?.pincode);
+    const addressWasUpdated = (address && address !== store.address) ||
+      (city && city !== (store.shiprocket?.pickup_location?.city || "")) ||
+      (state && state !== (store.shiprocket?.pickup_location?.state || "")) ||
+      (pincode && pincode !== (store.shiprocket?.pickup_location?.pincode || ""));
+
+    const shouldUpdateShiprocket = (address || store.address) &&
+      (name || store.name) &&
+      (phone || store.phone) &&
+      (finalCity && finalState && finalPincode) &&
+      (addressWasUpdated || !store.shiprocket?.pickup_address_id ||
+        !store.shiprocket?.pickup_location?.city ||
+        !store.shiprocket?.pickup_location?.state ||
+        !store.shiprocket?.pickup_location?.pincode);
 
     if (shouldUpdateShiprocket) {
       try {
@@ -631,17 +634,17 @@ export const updateSellerStore = async (req, res) => {
             // If update fails, try creating a new one
             shipResponse = await ShiprocketService.createPickupAddress(pickupPayload);
             console.log("📦 Shiprocket create response:", JSON.stringify(shipResponse, null, 2));
-            
+
             // Try multiple response formats
-            shiprocketPickupId = shipResponse?.data?.pickup_location || 
-                                shipResponse?.data?.id || 
-                                shipResponse?.data?.pickup_address_id ||
-                                shipResponse?.data?.pickup_id ||
-                                shipResponse?.pickup_location || 
-                                shipResponse?.id ||
-                                shipResponse?.pickup_address_id ||
-                                shipResponse?.pickup_id ||
-                                null;
+            shiprocketPickupId = shipResponse?.data?.pickup_location ||
+              shipResponse?.data?.id ||
+              shipResponse?.data?.pickup_address_id ||
+              shipResponse?.data?.pickup_id ||
+              shipResponse?.pickup_location ||
+              shipResponse?.id ||
+              shipResponse?.pickup_address_id ||
+              shipResponse?.pickup_id ||
+              null;
             console.log("✅ New Shiprocket pickup address created:", shiprocketPickupId);
           }
         } else {
@@ -649,17 +652,17 @@ export const updateSellerStore = async (req, res) => {
           console.log("🆕 Creating new Shiprocket pickup address");
           shipResponse = await ShiprocketService.createPickupAddress(pickupPayload);
           console.log("📦 Shiprocket create response:", JSON.stringify(shipResponse, null, 2));
-          
+
           // Try multiple response formats
-          shiprocketPickupId = shipResponse?.data?.pickup_location || 
-                              shipResponse?.data?.id || 
-                              shipResponse?.data?.pickup_address_id ||
-                              shipResponse?.data?.pickup_id ||
-                              shipResponse?.pickup_location || 
-                              shipResponse?.id ||
-                              shipResponse?.pickup_address_id ||
-                              shipResponse?.pickup_id ||
-                              null;
+          shiprocketPickupId = shipResponse?.data?.pickup_location ||
+            shipResponse?.data?.id ||
+            shipResponse?.data?.pickup_address_id ||
+            shipResponse?.data?.pickup_id ||
+            shipResponse?.pickup_location ||
+            shipResponse?.id ||
+            shipResponse?.pickup_address_id ||
+            shipResponse?.pickup_id ||
+            null;
           console.log("✅ Shiprocket pickup address created:", shiprocketPickupId);
         }
 
@@ -667,11 +670,11 @@ export const updateSellerStore = async (req, res) => {
         if (!store.shiprocket) {
           store.shiprocket = {};
         }
-        
+
         if (shiprocketPickupId) {
           store.shiprocket.pickup_address_id = shiprocketPickupId;
         }
-        
+
         // Always update pickup_location with complete data
         store.shiprocket.pickup_location = {
           name: pickupPayload.name,

@@ -337,12 +337,12 @@ export const loginSeller = async (req, res) => {
     //     message: "Your account was deleted!",
     //   });
     // }
-   if (seller.deleted) {
-     return res.status(status.Forbidden).json({
-       success: false,
-       message: "Your account was deleted!",
-     });
-   }
+    if (seller.deleted) {
+      return res.status(status.Forbidden).json({
+        success: false,
+        message: "Your account was deleted!",
+      });
+    }
     if (!seller.active) {
       return res.status(status.Unauthorized).json({
         success: false,
@@ -369,21 +369,21 @@ export const loginSeller = async (req, res) => {
     }
 
 
-        const store = await Store.findOne({ createdBy: seller._id }).lean();
+    const store = await Store.findOne({ createdBy: seller._id }).lean();
 
-        let onboardingInfo = {
-          hasStore: false,
-          onboardingCompleted: false,
-          storeStatus: null, // "P" | "A" | "R" | null
-        };
+    let onboardingInfo = {
+      hasStore: false,
+      onboardingCompleted: false,
+      storeStatus: null, // "P" | "A" | "R" | null
+    };
 
-        if (store) {
-          onboardingInfo = {
-            hasStore: true,
-            onboardingCompleted: !!store.onboardingCompleted,
-            storeStatus: store.status || "P",
-          };
-        }
+    if (store) {
+      onboardingInfo = {
+        hasStore: true,
+        onboardingCompleted: !!store.onboardingCompleted,
+        storeStatus: store.status || "P",
+      };
+    }
 
 
 
@@ -412,10 +412,19 @@ export const checkSellerStatus = async (req, res) => {
 
     const store = await Store.findOne({ createdBy: seller._id });
 
+    let hasProduct = false;
+    let storeStatus = store?.status || null;
+
+    if (store) {
+      const productCount = await Product.countDocuments({ storeId: store._id, deleted: false });
+      if (productCount > 0) hasProduct = true;
+    }
+
     let onboarding = {
       hasStore: !!store,
-      onboardingCompleted: store?.onboardingCompleted || false,
-      storeStatus: store?.status || null,
+      onboardingCompleted: store?.onboardingCompleted && hasProduct && storeStatus !== 'R',
+      storeStatus: storeStatus,
+      hasProduct: hasProduct
     };
 
     return res.json({
@@ -467,71 +476,71 @@ export const updateStoreInfo = async (req, res) => {
 
 // ---------------- Set Seller Password ----------------
 export const setSellerPassword = async (req, res) => {
-    try {
-      const { phone, password, confirmPassword } = req.body;
-  
-      if (!phone || !password || !confirmPassword) {
-        return res.status(status.BadRequest).json({
-          status: jsonStatus.BadRequest,
-          success: false,
-          message: "Please enter phone, password, and confirm password",
-        });
-      }
-  
-      if (password !== confirmPassword) {
-        return res.status(status.BadRequest).json({
-          status: jsonStatus.BadRequest,
-          success: false,
-          message: "Passwords do not match",
-        });
-      }
-  
-      // ✅ Password strength validation
-      if (
-        password.length < 8 ||
-        !/[A-Z]/.test(password) ||
-        !/[0-9]/.test(password) ||
-        !/[!@#$%^&*]/.test(password)
-      ) {
-        return res.status(status.BadRequest).json({
-          status: jsonStatus.BadRequest,
-          success: false,
-          message: "Password must be at least 8 characters long and include an uppercase letter, a number, and a special character"
-        });
-      }
-  
-      const seller = await User.findOne({ phone, role: "seller" });
-      if (!seller) {
-        return res.status(status.NotFound).json({
-          status: jsonStatus.NotFound,
-          success: false,
-          message: "Seller not found with this phone number",
-        });
-      }
-  
-      // ❌ Don't hash manually here!
-      seller.password = password;  // model will hash automatically
-      await seller.save();
-  
-      const token = generateToken(seller._id);
-  
-      res.status(status.OK).json({
-        status: jsonStatus.OK,
-        success: true,
-        message: "Password set successfully",
-        data: seller,
-        token,
-      });
-    } catch (error) {
-      res.status(status.InternalServerError).json({
-        status: jsonStatus.InternalServerError,
+  try {
+    const { phone, password, confirmPassword } = req.body;
+
+    if (!phone || !password || !confirmPassword) {
+      return res.status(status.BadRequest).json({
+        status: jsonStatus.BadRequest,
         success: false,
-        message: error.message,
+        message: "Please enter phone, password, and confirm password",
       });
-      return catchError("setSellerPassword", error, req, res);
     }
-  };
-  
+
+    if (password !== confirmPassword) {
+      return res.status(status.BadRequest).json({
+        status: jsonStatus.BadRequest,
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
+
+    // ✅ Password strength validation
+    if (
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[0-9]/.test(password) ||
+      !/[!@#$%^&*]/.test(password)
+    ) {
+      return res.status(status.BadRequest).json({
+        status: jsonStatus.BadRequest,
+        success: false,
+        message: "Password must be at least 8 characters long and include an uppercase letter, a number, and a special character"
+      });
+    }
+
+    const seller = await User.findOne({ phone, role: "seller" });
+    if (!seller) {
+      return res.status(status.NotFound).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Seller not found with this phone number",
+      });
+    }
+
+    // ❌ Don't hash manually here!
+    seller.password = password;  // model will hash automatically
+    await seller.save();
+
+    const token = generateToken(seller._id);
+
+    res.status(status.OK).json({
+      status: jsonStatus.OK,
+      success: true,
+      message: "Password set successfully",
+      data: seller,
+      token,
+    });
+  } catch (error) {
+    res.status(status.InternalServerError).json({
+      status: jsonStatus.InternalServerError,
+      success: false,
+      message: error.message,
+    });
+    return catchError("setSellerPassword", error, req, res);
+  }
+};
+
 
 // ---------------- Verify Seller Password ----------------
 export const verifySellerPassword = async (req, res) => {
@@ -594,10 +603,10 @@ export const getSellerDashboard = async (req, res) => {
     const findStore = await Store.findOne({ createdBy: req.user._id })
       .populate("category", "name");
     if (!findStore) {
-      return res.status(status.NotFound).json({ 
+      return res.status(status.NotFound).json({
         status: jsonStatus.NotFound,
-        success: false, 
-        message: "Store not found. Please create a store first." 
+        success: false,
+        message: "Store not found. Please create a store first."
       });
     }
 
@@ -681,9 +690,9 @@ export const getSellerDashboard = async (req, res) => {
     const onTheWayCount = ordersData[0]?.onTheWayOrders[0]?.count || 0;
 
     // ========== FETCH TOTAL PRODUCTS ==========
-    const totalProducts = await Product.countDocuments({ 
-      storeId: storeId, 
-      deleted: false 
+    const totalProducts = await Product.countDocuments({
+      storeId: storeId,
+      deleted: false
     });
 
     // ========== SLOT BOOKING SUMMARY ==========
@@ -896,7 +905,7 @@ export const getSellerDashboard = async (req, res) => {
     ]);
 
     const lastMonthCount = lastMonthOrders?.count || 0;
-    const ordersPercentageChange = lastMonthCount > 0 
+    const ordersPercentageChange = lastMonthCount > 0
       ? ((todayOrdersCount - lastMonthCount) / lastMonthCount * 100).toFixed(2)
       : "0.00";
 
@@ -955,7 +964,7 @@ export const getSellerDashboard = async (req, res) => {
 export const getSellerOrderList = async (req, res) => {
   try {
     const { status: statusFilter, search, page = 1, limit = 20 } = req.query;
-    
+
     // Find the store belonging to the seller
     const findStore = await Store.findOne({ createdBy: req.user._id });
     if (!findStore) {
@@ -1179,17 +1188,17 @@ export const getSellerOrderList = async (req, res) => {
     // ✅ Get total count for both order types
     const countPipeline = [...pipeline];
     const onlineCountPipeline = [...onlinePipeline];
-    
+
     const [localTotalResult] = await Order.aggregate([
       ...countPipeline,
       { $count: "total" }
     ]);
-    
+
     const [onlineTotalResult] = await OnlineOrder.aggregate([
       ...onlineCountPipeline,
       { $count: "total" }
     ]);
-    
+
     const localTotal = localTotalResult?.total || 0;
     const onlineTotal = onlineTotalResult?.total || 0;
     const total = localTotal + onlineTotal;
@@ -1201,7 +1210,7 @@ export const getSellerOrderList = async (req, res) => {
       { $limit: parseInt(limit) },
       { $sort: { createdAt: -1 } }
     );
-    
+
     onlinePipeline.push(
       { $skip: skip },
       { $limit: parseInt(limit) },
@@ -1451,10 +1460,10 @@ export const sendForgotPasswordOtp = async (req, res) => {
 
     // Store in OtpModel
     await OtpModel.deleteMany({ email: email.toLowerCase() }); // Clear old ones
-    const otpRecord = new OtpModel({ 
-      email: email.toLowerCase(), 
-      otp: hashedOtp, 
-      expiresAt 
+    const otpRecord = new OtpModel({
+      email: email.toLowerCase(),
+      otp: hashedOtp,
+      expiresAt
     });
     await otpRecord.save();
 
@@ -1532,7 +1541,7 @@ export const verifyForgotPasswordOtp = async (req, res) => {
 
     // Mark as verified (optional: can use a flag, but for now we just allow the reset step to proceed if we find a valid record)
     // We'll keep the record until the actual reset happens.
-    
+
     res.status(status.OK).json({
       status: jsonStatus.OK,
       success: true,

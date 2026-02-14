@@ -21,8 +21,8 @@ adminRouter.post('/login/admin/v1', loginAdmin);
 // store categories
 // image upload
 adminRouter.post('/retailer/upload/store/category/image/v1', [
-    body('sFileName').not().isEmpty(),
-    body('sContentType').not().isEmpty()
+  body('sFileName').not().isEmpty(),
+  body('sContentType').not().isEmpty()
 ], adminAuthentication, uploadStoreCategoryImage);
 adminRouter.post('/admin/create/store/category/v1', adminAuthentication, createStoreCategory);
 adminRouter.put('/admin/edit/store/category/:id/v1', adminAuthentication, editStoreCategory);

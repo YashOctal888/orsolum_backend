@@ -13,7 +13,8 @@ import { signedUrl } from '../helper/s3.config.js';
 import { processGoogleMapsLink } from '../helper/latAndLong.js';
 import PickupAddress from '../models/PickupAddress.js';
 import ShiprocketService from '../helper/shiprocketService.js';
-import Category from "../models/Category.js";
+import ProductCategory from "../models/OnlineStore/Category.js";
+import ProductSubCategory from "../models/OnlineStore/SubCategory.js";
 
 let limit = process.env.LIMIT;
 limit = limit ? Number(limit) : 10;
@@ -54,14 +55,14 @@ const parseAddressFields = (addressString) => {
   }
 
   const address = addressString.trim();
-  
+
   // Extract pincode (6-digit number, usually at the end)
   const pincodeMatch = address.match(/\b(\d{6})\b/);
   const pincode = pincodeMatch ? pincodeMatch[1] : null;
-  
+
   // Remove pincode from address for further parsing
   let addressWithoutPincode = address.replace(/\b\d{6}\b/, '').trim();
-  
+
   // Common Indian states (case-insensitive)
   const indianStates = [
     'Gujarat', 'Gujrat', 'Maharashtra', 'Rajasthan', 'Punjab', 'Haryana',
@@ -71,11 +72,11 @@ const parseAddressFields = (addressString) => {
     'Himachal Pradesh', 'Uttarakhand', 'Goa', 'Manipur', 'Meghalaya',
     'Mizoram', 'Nagaland', 'Sikkim', 'Tripura', 'Arunachal Pradesh'
   ];
-  
+
   // Try to find state in address
   let state = null;
   let city = null;
-  
+
   // Check for state names (case-insensitive)
   for (const stateName of indianStates) {
     const stateRegex = new RegExp(`\\b${stateName.replace(/\s+/g, '\\s+')}\\b`, 'i');
@@ -87,7 +88,7 @@ const parseAddressFields = (addressString) => {
       break;
     }
   }
-  
+
   // Common Indian cities (case-insensitive)
   const commonCities = [
     'Surat', 'Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata',
@@ -98,7 +99,7 @@ const parseAddressFields = (addressString) => {
     'Raipur', 'Allahabad', 'Coimbatore', 'Jabalpur', 'Gwalior', 'Vijayawada',
     'Madurai', 'Guwahati', 'Chandigarh', 'Hubli', 'Mysore', 'Ranchi'
   ];
-  
+
   // Try to find city in address (usually appears before state)
   for (const cityName of commonCities) {
     const cityRegex = new RegExp(`\\b${cityName}\\b`, 'i');
@@ -110,7 +111,7 @@ const parseAddressFields = (addressString) => {
       break;
     }
   }
-  
+
   // If city not found, try to extract last word before state (common pattern)
   if (!city && state) {
     const parts = addressWithoutPincode.split(/[,\s]+/).filter(p => p.trim());
@@ -118,7 +119,7 @@ const parseAddressFields = (addressString) => {
       city = parts[parts.length - 1]; // Last part before state
     }
   }
-  
+
   // If still no city, try to extract from common patterns
   if (!city) {
     // Pattern: "Address, City" or "Address City"
@@ -127,7 +128,7 @@ const parseAddressFields = (addressString) => {
       city = cityMatch[1].trim();
     }
   }
-  
+
   return {
     city: city || null,
     state: state || null,
@@ -183,12 +184,12 @@ const applyCoverImageFallback = (storeDoc = {}) => {
 };
 
 export const uploadStoreImage = async (req, res) => {
-    try {
-        signedUrl(req, res, 'Store/')
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('uploadStoreImage', error, req, res);
-    }
+  try {
+    signedUrl(req, res, 'Store/')
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('uploadStoreImage', error, req, res);
+  }
 }
 
 
@@ -217,7 +218,7 @@ export const createStore = async (req, res) => {
         city = city || parsedFields.city;
         state = state || parsedFields.state;
         pincode = pincode || parsedFields.pincode;
-        
+
         console.log("📝 Parsed address fields:", {
           originalAddress: address,
           parsed: parsedFields,
@@ -318,30 +319,30 @@ export const createStore = async (req, res) => {
         city: pickupPayload.city,
         state: pickupPayload.state
       });
-      
+
       shipResponse = await ShiprocketService.createPickupAddress(pickupPayload);
       console.log("📦 Shiprocket raw response:", JSON.stringify(shipResponse, null, 2));
-      
+
       // Handle different response structures from Shiprocket
       // Try multiple possible response formats
-      shiprocketPickupId = shipResponse?.data?.pickup_location || 
-                      shipResponse?.data?.id || 
-                      shipResponse?.data?.pickup_address_id ||
-                      shipResponse?.data?.pickup_id ||
-                      shipResponse?.pickup_location || 
-                      shipResponse?.id ||
-                      shipResponse?.pickup_address_id ||
-                      shipResponse?.pickup_id ||
-                      shipResponse?.data?.data?.pickup_location ||
-                      shipResponse?.data?.data?.id ||
-                      null;
+      shiprocketPickupId = shipResponse?.data?.pickup_location ||
+        shipResponse?.data?.id ||
+        shipResponse?.data?.pickup_address_id ||
+        shipResponse?.data?.pickup_id ||
+        shipResponse?.pickup_location ||
+        shipResponse?.id ||
+        shipResponse?.pickup_address_id ||
+        shipResponse?.pickup_id ||
+        shipResponse?.data?.data?.pickup_location ||
+        shipResponse?.data?.data?.id ||
+        null;
 
       // If still null, try to extract from response message or other fields
       if (!shiprocketPickupId && shipResponse?.data) {
         // Sometimes the ID might be in a nested structure
         const data = shipResponse.data;
-        shiprocketPickupId = data.pickup_location || data.id || data.pickup_id || 
-                           (typeof data === 'object' && Object.values(data).find(v => typeof v === 'number' || typeof v === 'string'));
+        shiprocketPickupId = data.pickup_location || data.id || data.pickup_id ||
+          (typeof data === 'object' && Object.values(data).find(v => typeof v === 'number' || typeof v === 'string'));
       }
 
       // Try to extract from response message if it contains the ID
@@ -424,7 +425,7 @@ export const createStore = async (req, res) => {
 
       // Get Shiprocket ID from saved PickupAddress if it wasn't set earlier
       let finalShiprocketId = shiprocketPickupId || savedPickupAddress.shiprocket?.pickup_address_id;
-      
+
       // If we have Shiprocket ID but PickupAddress doesn't, update it
       if (shiprocketPickupId && !savedPickupAddress.shiprocket.pickup_address_id) {
         savedPickupAddress.shiprocket.pickup_address_id = shiprocketPickupId;
@@ -432,7 +433,7 @@ export const createStore = async (req, res) => {
         finalShiprocketId = shiprocketPickupId;
         console.log("✅ Updated PickupAddress with Shiprocket ID:", finalShiprocketId);
       }
-      
+
       // Refresh PickupAddress to get latest data
       savedPickupAddress = await PickupAddress.findById(savedPickupAddress._id);
       finalShiprocketId = savedPickupAddress.shiprocket?.pickup_address_id || finalShiprocketId;
@@ -462,10 +463,10 @@ export const createStore = async (req, res) => {
         },
         { new: true, runValidators: true }
       );
-      
+
       console.log("✅ Store updated with pickup address using findByIdAndUpdate");
       console.log("✅ Shiprocket pickup_address_id set to:", finalShiprocketId);
-      
+
       // Refresh store to get latest data
       savedStore = await Store.findById(savedStore._id).populate('shiprocket.pickup_addresses');
       console.log("✅ Store refreshed. pickup_addresses count:", savedStore.shiprocket?.pickup_addresses?.length || 0);
@@ -479,12 +480,12 @@ export const createStore = async (req, res) => {
         name: pickupErr.name,
         errors: pickupErr.errors
       });
-      
+
       // Even if PickupAddress creation fails, save complete pickup_location structure
       if (!savedStore.shiprocket) {
         savedStore.shiprocket = {};
       }
-      
+
       savedStore.shiprocket.pickup_address_id = shiprocketPickupId;
       savedStore.shiprocket.pickup_location = {
         name: pickupPayload.name,
@@ -498,10 +499,10 @@ export const createStore = async (req, res) => {
       };
       savedStore.shiprocket.pickup_addresses = [];
       savedStore.shiprocket.default_pickup_address = null;
-      
+
       savedStore.markModified('shiprocket');
       savedStore.markModified('shiprocket.pickup_location');
-      
+
       await savedStore.save();
       console.warn("⚠️ Store saved with basic shiprocket structure (PickupAddress creation failed)");
     }
@@ -527,7 +528,7 @@ export const createStore = async (req, res) => {
 
     // Populate pickup_addresses if they exist - ALWAYS populate to get Shiprocket ID
     let responseStore = savedStore;
-    
+
     // Always try to populate pickup_addresses to get Shiprocket IDs
     if (savedStore.shiprocket?.pickup_addresses?.length > 0) {
       // Always populate to ensure we get the Shiprocket ID
@@ -537,18 +538,18 @@ export const createStore = async (req, res) => {
           select: '_id shiprocket.pickup_address_id nickname'
         })
         .lean();
-      
+
       // If populate didn't work, try direct query
       if (!responseStore.shiprocket?.pickup_addresses || responseStore.shiprocket.pickup_addresses.length === 0) {
-        const pickupIds = savedStore.shiprocket.pickup_addresses.map(id => 
+        const pickupIds = savedStore.shiprocket.pickup_addresses.map(id =>
           typeof id === 'object' ? id._id || id : id
         ).filter(Boolean);
-        
+
         if (pickupIds.length > 0) {
           const pickupAddresses = await PickupAddress.find({ _id: { $in: pickupIds } })
             .select('_id shiprocket.pickup_address_id nickname')
             .lean();
-          
+
           responseStore = savedStore.toObject ? savedStore.toObject() : savedStore;
           responseStore.shiprocket.pickup_addresses = pickupAddresses;
         }
@@ -566,27 +567,27 @@ export const createStore = async (req, res) => {
         default_pickup_address: null
       };
     }
-    
+
     // Ensure pickup_addresses is always an array
     if (!Array.isArray(responseStore.shiprocket.pickup_addresses)) {
       responseStore.shiprocket.pickup_addresses = [];
     }
-    
+
     // If pickup_addresses is populated, add the data
     if (Array.isArray(responseStore.shiprocket.pickup_addresses) && responseStore.shiprocket.pickup_addresses.length > 0) {
       // Get full PickupAddress documents with all fields
-      const pickupIds = responseStore.shiprocket.pickup_addresses.map(addr => 
+      const pickupIds = responseStore.shiprocket.pickup_addresses.map(addr =>
         typeof addr === 'object' ? addr._id || addr : addr
       ).filter(Boolean);
-      
+
       // Fetch full PickupAddress documents
       const fullPickupAddresses = await PickupAddress.find({ _id: { $in: pickupIds } })
         .select('-__v')
         .lean();
-      
+
       responseStore.shiprocket.pickup_addresses_data = fullPickupAddresses;
       responseStore.shiprocket.pickup_addresses_ids = pickupIds;
-      
+
       // Get Shiprocket ID from the first pickup address if available
       if (!responseStore.shiprocket.pickup_address_id && fullPickupAddresses.length > 0) {
         const firstPickup = fullPickupAddresses[0];
@@ -598,72 +599,72 @@ export const createStore = async (req, res) => {
       responseStore.shiprocket.pickup_addresses_data = [];
       responseStore.shiprocket.pickup_addresses_ids = [];
 
-    // Try to recover pickup addresses from DB by storeId
-    try {
-      const pickupDocs = await PickupAddress.find({ storeId: savedStore._id })
-        .select('-__v')
-        .lean();
-      if (pickupDocs.length > 0) {
-        responseStore.shiprocket.pickup_addresses = pickupDocs;
-        responseStore.shiprocket.pickup_addresses_data = pickupDocs;
-        responseStore.shiprocket.pickup_addresses_ids = pickupDocs.map((p) => p._id);
-        if (!responseStore.shiprocket.pickup_address_id) {
-          responseStore.shiprocket.pickup_address_id =
-            pickupDocs[0].shiprocket?.pickup_address_id || responseStore.shiprocket.pickup_address_id || null;
-        }
-      }
-    } catch (recoverErr) {
-      console.warn("⚠️ Failed to recover pickup addresses by storeId:", recoverErr.message);
-    }
-
-    // Fallback: if pickup_addresses is still empty but pickup_location exists, synthesize an entry for UI
-    const pl = responseStore.shiprocket.pickup_location || {};
-    const hasPickupLocation =
-      pl.address || pl.city || pl.state || pl.pincode || pl.name || pl.phone || pl.email;
-    if (hasPickupLocation && (!responseStore.shiprocket.pickup_addresses || responseStore.shiprocket.pickup_addresses.length === 0)) {
-      const synthesized = {
-        _id: null,
-        nickname: pl.name || "Primary",
-        shiprocket: {
-          pickup_address_id: responseStore.shiprocket.pickup_address_id || null,
-          pickup_location: {
-            name: pl.name || "",
-            phone: pl.phone || "",
-            email: pl.email || "",
-            address: pl.address || "",
-            city: pl.city || "",
-            state: pl.state || "",
-            pincode: pl.pincode || "",
-            country: pl.country || "India"
+      // Try to recover pickup addresses from DB by storeId
+      try {
+        const pickupDocs = await PickupAddress.find({ storeId: savedStore._id })
+          .select('-__v')
+          .lean();
+        if (pickupDocs.length > 0) {
+          responseStore.shiprocket.pickup_addresses = pickupDocs;
+          responseStore.shiprocket.pickup_addresses_data = pickupDocs;
+          responseStore.shiprocket.pickup_addresses_ids = pickupDocs.map((p) => p._id);
+          if (!responseStore.shiprocket.pickup_address_id) {
+            responseStore.shiprocket.pickup_address_id =
+              pickupDocs[0].shiprocket?.pickup_address_id || responseStore.shiprocket.pickup_address_id || null;
           }
         }
-      };
-      responseStore.shiprocket.pickup_addresses = [synthesized];
-      responseStore.shiprocket.pickup_addresses_data = [synthesized];
-    }
+      } catch (recoverErr) {
+        console.warn("⚠️ Failed to recover pickup addresses by storeId:", recoverErr.message);
+      }
+
+      // Fallback: if pickup_addresses is still empty but pickup_location exists, synthesize an entry for UI
+      const pl = responseStore.shiprocket.pickup_location || {};
+      const hasPickupLocation =
+        pl.address || pl.city || pl.state || pl.pincode || pl.name || pl.phone || pl.email;
+      if (hasPickupLocation && (!responseStore.shiprocket.pickup_addresses || responseStore.shiprocket.pickup_addresses.length === 0)) {
+        const synthesized = {
+          _id: null,
+          nickname: pl.name || "Primary",
+          shiprocket: {
+            pickup_address_id: responseStore.shiprocket.pickup_address_id || null,
+            pickup_location: {
+              name: pl.name || "",
+              phone: pl.phone || "",
+              email: pl.email || "",
+              address: pl.address || "",
+              city: pl.city || "",
+              state: pl.state || "",
+              pincode: pl.pincode || "",
+              country: pl.country || "India"
+            }
+          }
+        };
+        responseStore.shiprocket.pickup_addresses = [synthesized];
+        responseStore.shiprocket.pickup_addresses_data = [synthesized];
+      }
     }
 
     const finalResponseStore = applyCoverImageFallback(responseStore);
-    
+
     // Final validation - ensure no null values in critical fields
     if (finalResponseStore.shiprocket) {
       if (!Array.isArray(finalResponseStore.shiprocket.pickup_addresses)) {
         finalResponseStore.shiprocket.pickup_addresses = [];
       }
-      
+
       // If default_pickup_address exists but pickup_addresses is empty, add it
-      if (finalResponseStore.shiprocket.default_pickup_address && 
-          (!finalResponseStore.shiprocket.pickup_addresses || finalResponseStore.shiprocket.pickup_addresses.length === 0)) {
+      if (finalResponseStore.shiprocket.default_pickup_address &&
+        (!finalResponseStore.shiprocket.pickup_addresses || finalResponseStore.shiprocket.pickup_addresses.length === 0)) {
         finalResponseStore.shiprocket.pickup_addresses = [finalResponseStore.shiprocket.default_pickup_address];
         finalResponseStore.shiprocket.pickup_addresses_ids = [finalResponseStore.shiprocket.default_pickup_address];
       }
-      
+
       // Get Shiprocket ID from PickupAddress if not set in store
       if (!finalResponseStore.shiprocket.pickup_address_id) {
         // First try from savedPickupAddress
         if (savedPickupAddress?.shiprocket?.pickup_address_id) {
           finalResponseStore.shiprocket.pickup_address_id = savedPickupAddress.shiprocket.pickup_address_id;
-        } 
+        }
         // Then try from pickup_addresses_data (already populated above)
         else if (finalResponseStore.shiprocket.pickup_addresses_data?.length > 0) {
           const firstPickup = finalResponseStore.shiprocket.pickup_addresses_data[0];
@@ -758,7 +759,7 @@ export const editStore = async (req, res) => {
       if (!updateData.pincode && parsedFields.pincode) {
         updateData.pincode = parsedFields.pincode;
       }
-      
+
       console.log("📝 Parsed address fields in editStore:", {
         originalAddress: updateData.address,
         parsed: parsedFields,
@@ -851,9 +852,9 @@ export const editStore = async (req, res) => {
         };
 
         // Check if pickup address already exists for this store
-        let existingPickupAddress = await PickupAddress.findOne({ 
+        let existingPickupAddress = await PickupAddress.findOne({
           storeId: id,
-          isPrimary: true 
+          isPrimary: true
         });
 
         let shiprocketPickupId = null;
@@ -874,14 +875,14 @@ export const editStore = async (req, res) => {
           } else {
             // Create new pickup address in Shiprocket
             shipResponse = await shiprocketService.createPickupAddress(pickupPayload);
-            
+
             // Extract Shiprocket ID from response
-            shiprocketPickupId = shipResponse?.data?.pickup_location || 
-                                shipResponse?.data?.id || 
-                                shipResponse?.data?.pickup_address_id ||
-                                shipResponse?.data?.pickup_id ||
-                                shipResponse?.pickup_location || 
-                                shipResponse?.id || null;
+            shiprocketPickupId = shipResponse?.data?.pickup_location ||
+              shipResponse?.data?.id ||
+              shipResponse?.data?.pickup_address_id ||
+              shipResponse?.data?.pickup_id ||
+              shipResponse?.pickup_location ||
+              shipResponse?.id || null;
           }
 
           if (!shiprocketPickupId && !existingPickupAddress?.shiprocket?.pickup_address_id) {
@@ -948,7 +949,7 @@ export const editStore = async (req, res) => {
 
         // Update store with pickup address reference
         const finalShiprocketId = shiprocketPickupId || existingPickupAddress.shiprocket?.pickup_address_id;
-        
+
         await Store.findByIdAndUpdate(
           id,
           {
@@ -1148,232 +1149,232 @@ export const editStore = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-  
+
 export const storeDetails = async (req, res) => {
-    try {
-      if (!req.user || !req.user._id) {
-        return res
-          .status(status.Unauthorized)
-          .json({ success: false, message: "Unauthorized access" });
-      }
-  
-      // First check if store exists
-      const existingStore = await Store.findOne({ createdBy: req.user._id });
-      if (!existingStore) {
-        return res
-          .status(status.OK)
-          .json({
-            success: true,
-            message: "No store created yet",
-            data: null
-          });
-      }
-  
-      // Use consistent ObjectId conversion
-      const userIdObjectId = new mongoose.Types.ObjectId(req.user._id);
-      
-      const storeDetails = await Store.aggregate([
-        { $match: { createdBy: userIdObjectId } },
-        {
-          $lookup: {
-            from: "store_categories",
-            localField: "category",
-            foreignField: "_id",
-            as: "category_name",
-          },
-        },
-        {
-          $addFields: {
-            category_name: {
-              $ifNull: [{ $arrayElemAt: ["$category_name.name", 0] }, null],
-            },
-          },
-        },
-        {
-          $lookup: {
-            from: "store_offers",
-            localField: "_id",
-            foreignField: "storeId",
-            as: "storeOffers",
-            pipeline: [{ $match: { deleted: false } }],
-          },
-        },
-        {
-          $lookup: {
-            from: "store_popular_products",
-            localField: "_id",
-            foreignField: "storeId",
-            as: "popularProducts",
-            pipeline: [
-              {
-                $lookup: {
-                  from: "products",
-                  localField: "productId",
-                  foreignField: "_id",
-                  as: "productDetails",
-                },
-              },
-              {
-                $addFields: {
-                  productDetails: {
-                    $ifNull: [{ $arrayElemAt: ["$productDetails", 0] }, null],
-                  },
-                },
-              },
-            ],
-          },
-        },
-      ]);
-  
-      const enrichedStores = await Promise.all(
-        storeDetails.map(async (storeDoc) => {
-          const shiprocketInfo = storeDoc.shiprocket || {};
-          const pickupIds = shiprocketInfo.pickup_addresses || [];
+  try {
+    if (!req.user || !req.user._id) {
+      return res
+        .status(status.Unauthorized)
+        .json({ success: false, message: "Unauthorized access" });
+    }
 
-          let pickupAddresses = [];
-          if (pickupIds.length) {
-            pickupAddresses = await PickupAddress.find({ _id: { $in: pickupIds } })
-              .select("-__v")
-              .lean();
-          }
-
-          const defaultPickupId = shiprocketInfo.default_pickup_address?.toString() || null;
-          const defaultPickup = defaultPickupId
-            ? pickupAddresses.find((addr) => addr._id.toString() === defaultPickupId)
-            : null;
-
-          return applyCoverImageFallback({
-            ...storeDoc,
-            shiprocket: {
-              ...shiprocketInfo,
-              pickup_addresses_ids: pickupIds,
-              pickup_addresses_data: pickupAddresses,
-              default_pickup_address_id: defaultPickupId,
-              default_pickup_address_data: defaultPickup || null,
-            },
-          });
-        })
-      );
-  
-      // Return single store object (not array) with complete structure
-      const storeData = enrichedStores[0] || null;
-      
-      // Even if aggregation doesn't return data, return the basic store info
-      if (!storeData && existingStore) {
-        const basicStoreData = {
-          _id: existingStore._id,
-          name: existingStore.name,
-          category: existingStore.category,
-          information: existingStore.information,
-          phone: existingStore.phone,
-          address: existingStore.address,
-          email: existingStore.email,
-          directMe: existingStore.directMe,
-          coverImage: existingStore.coverImage,
-          images: existingStore.images || [],
-          createdBy: existingStore.createdBy,
-          updatedBy: existingStore.updatedBy,
-          status: existingStore.status,
-          location: existingStore.location,
-          shiprocket: existingStore.shiprocket || {},
-          createdAt: existingStore.createdAt,
-          updatedAt: existingStore.updatedAt,
-          storeOffers: [],
-          popularProducts: [],
-        };
-        
-        return res.status(status.OK).json({
+    // First check if store exists
+    const existingStore = await Store.findOne({ createdBy: req.user._id });
+    if (!existingStore) {
+      return res
+        .status(status.OK)
+        .json({
           success: true,
-          message: "Store details fetched successfully",
-          data: basicStoreData,
+          message: "No store created yet",
+          data: null
         });
-      }
+    }
 
-      // Format store data to match expected structure
-      const formattedStore = {
-        _id: storeData._id,
-        name: storeData.name,
-        category: storeData.category,
-        category_name: storeData.category_name,
-        information: storeData.information,
-        phone: storeData.phone,
-        address: storeData.address,
-        email: storeData.email,
-        directMe: storeData.directMe,
-        coverImage: storeData.coverImage,
-        images: storeData.images || [],
-        createdBy: storeData.createdBy,
-        updatedBy: storeData.updatedBy,
-        status: storeData.status,
-        location: storeData.location,
-        shiprocket: storeData.shiprocket,
-        createdAt: storeData.createdAt,
-        updatedAt: storeData.updatedAt,
-        storeOffers: storeData.storeOffers || [],
-        popularProducts: (storeData.popularProducts || []).map((pp) => ({
-          _id: pp._id,
-          productId: pp.productId,
-          storeId: pp.storeId,
-          productDetails: pp.productDetails,
-        })),
+    // Use consistent ObjectId conversion
+    const userIdObjectId = new mongoose.Types.ObjectId(req.user._id);
+
+    const storeDetails = await Store.aggregate([
+      { $match: { createdBy: userIdObjectId } },
+      {
+        $lookup: {
+          from: "store_categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "category_name",
+        },
+      },
+      {
+        $addFields: {
+          category_name: {
+            $ifNull: [{ $arrayElemAt: ["$category_name.name", 0] }, null],
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "store_offers",
+          localField: "_id",
+          foreignField: "storeId",
+          as: "storeOffers",
+          pipeline: [{ $match: { deleted: false } }],
+        },
+      },
+      {
+        $lookup: {
+          from: "store_popular_products",
+          localField: "_id",
+          foreignField: "storeId",
+          as: "popularProducts",
+          pipeline: [
+            {
+              $lookup: {
+                from: "products",
+                localField: "productId",
+                foreignField: "_id",
+                as: "productDetails",
+              },
+            },
+            {
+              $addFields: {
+                productDetails: {
+                  $ifNull: [{ $arrayElemAt: ["$productDetails", 0] }, null],
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const enrichedStores = await Promise.all(
+      storeDetails.map(async (storeDoc) => {
+        const shiprocketInfo = storeDoc.shiprocket || {};
+        const pickupIds = shiprocketInfo.pickup_addresses || [];
+
+        let pickupAddresses = [];
+        if (pickupIds.length) {
+          pickupAddresses = await PickupAddress.find({ _id: { $in: pickupIds } })
+            .select("-__v")
+            .lean();
+        }
+
+        const defaultPickupId = shiprocketInfo.default_pickup_address?.toString() || null;
+        const defaultPickup = defaultPickupId
+          ? pickupAddresses.find((addr) => addr._id.toString() === defaultPickupId)
+          : null;
+
+        return applyCoverImageFallback({
+          ...storeDoc,
+          shiprocket: {
+            ...shiprocketInfo,
+            pickup_addresses_ids: pickupIds,
+            pickup_addresses_data: pickupAddresses,
+            default_pickup_address_id: defaultPickupId,
+            default_pickup_address_data: defaultPickup || null,
+          },
+        });
+      })
+    );
+
+    // Return single store object (not array) with complete structure
+    const storeData = enrichedStores[0] || null;
+
+    // Even if aggregation doesn't return data, return the basic store info
+    if (!storeData && existingStore) {
+      const basicStoreData = {
+        _id: existingStore._id,
+        name: existingStore.name,
+        category: existingStore.category,
+        information: existingStore.information,
+        phone: existingStore.phone,
+        address: existingStore.address,
+        email: existingStore.email,
+        directMe: existingStore.directMe,
+        coverImage: existingStore.coverImage,
+        images: existingStore.images || [],
+        createdBy: existingStore.createdBy,
+        updatedBy: existingStore.updatedBy,
+        status: existingStore.status,
+        location: existingStore.location,
+        shiprocket: existingStore.shiprocket || {},
+        createdAt: existingStore.createdAt,
+        updatedAt: existingStore.updatedAt,
+        storeOffers: [],
+        popularProducts: [],
       };
 
       return res.status(status.OK).json({
         success: true,
         message: "Store details fetched successfully",
-        data: formattedStore,
-      });
-    } catch (error) {
-      console.error("Error in storeDetails:", error);
-      return res.status(status.InternalServerError).json({
-        success: false,
-        message: "Failed to fetch store details: " + error.message,
+        data: basicStoreData,
       });
     }
-  };
-  
+
+    // Format store data to match expected structure
+    const formattedStore = {
+      _id: storeData._id,
+      name: storeData.name,
+      category: storeData.category,
+      category_name: storeData.category_name,
+      information: storeData.information,
+      phone: storeData.phone,
+      address: storeData.address,
+      email: storeData.email,
+      directMe: storeData.directMe,
+      coverImage: storeData.coverImage,
+      images: storeData.images || [],
+      createdBy: storeData.createdBy,
+      updatedBy: storeData.updatedBy,
+      status: storeData.status,
+      location: storeData.location,
+      shiprocket: storeData.shiprocket,
+      createdAt: storeData.createdAt,
+      updatedAt: storeData.updatedAt,
+      storeOffers: storeData.storeOffers || [],
+      popularProducts: (storeData.popularProducts || []).map((pp) => ({
+        _id: pp._id,
+        productId: pp.productId,
+        storeId: pp.storeId,
+        productDetails: pp.productDetails,
+      })),
+    };
+
+    return res.status(status.OK).json({
+      success: true,
+      message: "Store details fetched successfully",
+      data: formattedStore,
+    });
+  } catch (error) {
+    console.error("Error in storeDetails:", error);
+    return res.status(status.InternalServerError).json({
+      success: false,
+      message: "Failed to fetch store details: " + error.message,
+    });
+  }
+};
+
 export const deleteStoreImage = async (req, res) => {
-    try {
+  try {
 
-        const store = await Store.findOne({ createdBy: req.user._id });
-        if (!store) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "You have not created any store with this account" });
-        }
-
-        const { index } = req.body;
-
-        if (typeof index !== "number" || index < 0) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Invalid index provided." });
-        }
-
-        if (index >= store.images.length) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Index out of bounds." });
-        }
-
-        let updatedStore = await Store.findByIdAndUpdate(
-            store._id,
-            {
-                $pull: {
-                    images: store.images[index]
-                }
-            },
-            { new: true, runValidators: true }
-        );
-
-        if (updatedStore) {
-            const imagesArray = Array.isArray(updatedStore.images) ? updatedStore.images : [];
-            const nextCover = imagesArray[0] || "";
-            if (updatedStore.coverImage !== nextCover) {
-                updatedStore.coverImage = nextCover;
-                updatedStore = await updatedStore.save();
-            }
-        }
-
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: applyCoverImageFallback(updatedStore?.toObject ? updatedStore.toObject() : updatedStore) });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('deleteStoreImage', error, req, res);
+    const store = await Store.findOne({ createdBy: req.user._id });
+    if (!store) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "You have not created any store with this account" });
     }
+
+    const { index } = req.body;
+
+    if (typeof index !== "number" || index < 0) {
+      return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Invalid index provided." });
+    }
+
+    if (index >= store.images.length) {
+      return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Index out of bounds." });
+    }
+
+    let updatedStore = await Store.findByIdAndUpdate(
+      store._id,
+      {
+        $pull: {
+          images: store.images[index]
+        }
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (updatedStore) {
+      const imagesArray = Array.isArray(updatedStore.images) ? updatedStore.images : [];
+      const nextCover = imagesArray[0] || "";
+      if (updatedStore.coverImage !== nextCover) {
+        updatedStore.coverImage = nextCover;
+        updatedStore = await updatedStore.save();
+      }
+    }
+
+    res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: applyCoverImageFallback(updatedStore?.toObject ? updatedStore.toObject() : updatedStore) });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('deleteStoreImage', error, req, res);
+  }
 };
 
 export const listOfCategories = async (req, res) => {
@@ -1388,32 +1389,10 @@ export const listOfCategories = async (req, res) => {
       });
     }
 
-
-    const categories = await Category.aggregate([
-      {
-        $match: { type }
-      },
-      {
-        $group: {
-          _id: "$category_name",
-          categoryId: { $first: "$_id" },
-          sub_categories: {
-            $push: {
-              id: "$_id",
-              name: "$sub_category_name"
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          id: "$categoryId",
-          name: "$_id",
-          sub_categories: 1
-        }
-      }
-    ]);
+    const categories = await ProductCategory.find({
+      storeType: type,
+      deleted: { $ne: true },
+    }).sort({ createdAt: -1 });
 
     res.status(status.OK).json({
       status: jsonStatus.OK,
@@ -1431,305 +1410,338 @@ export const listOfCategories = async (req, res) => {
   }
 };
 
-export const saveAllOffers = async (req, res) => {
-    try {
-        const { offers } = req.body;
+export const listSubCategoriesByCategoryId = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
 
-        const store = await Store.findOne({ createdBy: req.user._id });
-        if (!store) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "You have not created any store with this account" });
-        }
-
-        if (!Array.isArray(offers)) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Offers must be an array." });
-        }
-
-        const userId = req.user._id;
-
-        const offerDocuments = offers.map(offer => ({
-            offer,
-            createdBy: userId,
-            storeId: store._id
-        }));
-
-        await StoreOffer.deleteMany({ storeId: store._id, createdBy: userId });
-
-        const insertedOffers = await StoreOffer.insertMany(offerDocuments);
-
-        await broadcastOfferNotification(store, insertedOffers.length);
-
-        res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: insertedOffers });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('saveAllOffers', error, req, res);
+    if (!categoryId) {
+      return res.status(status.BadRequest).json({
+        status: jsonStatus.BadRequest,
+        success: false,
+        message: "Category ID is required"
+      });
     }
+
+    const subCategories = await ProductSubCategory.find({
+      categoryId,
+      deleted: { $ne: true },
+    }).sort({ createdAt: -1 });
+
+    res.status(status.OK).json({
+      status: jsonStatus.OK,
+      success: true,
+      data: subCategories
+    });
+
+  } catch (error) {
+    res.status(status.InternalServerError).json({
+      status: jsonStatus.InternalServerError,
+      success: false,
+      message: error.message
+    });
+    return catchError('listSubCategoriesByCategoryId', error, req, res);
+  }
+};
+
+export const saveAllOffers = async (req, res) => {
+  try {
+    const { offers } = req.body;
+
+    const store = await Store.findOne({ createdBy: req.user._id });
+    if (!store) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "You have not created any store with this account" });
+    }
+
+    if (!Array.isArray(offers)) {
+      return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Offers must be an array." });
+    }
+
+    const userId = req.user._id;
+
+    const offerDocuments = offers.map(offer => ({
+      offer,
+      createdBy: userId,
+      storeId: store._id
+    }));
+
+    await StoreOffer.deleteMany({ storeId: store._id, createdBy: userId });
+
+    const insertedOffers = await StoreOffer.insertMany(offerDocuments);
+
+    await broadcastOfferNotification(store, insertedOffers.length);
+
+    res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: insertedOffers });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('saveAllOffers', error, req, res);
+  }
 };
 
 export const createStoreOffer = async (req, res) => {
-    try {
-        const { offer } = req.body;
-        const { id } = req.params;
+  try {
+    const { offer } = req.body;
+    const { id } = req.params;
 
-        if (!offer) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Please enter offer" });
-        }
-
-        const store = await Store.findOne({ _id: id, createdBy: req.user._id });
-        if (!store) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
-        }
-
-        let newStoreOffer = new StoreOffer({ offer, createdBy: req.user._id, storeId: id });
-        newStoreOffer = await newStoreOffer.save();
-
-        await broadcastOfferNotification(store, 1);
-
-        res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: newStoreOffer });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('createStoreOffer', error, req, res);
+    if (!offer) {
+      return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Please enter offer" });
     }
+
+    const store = await Store.findOne({ _id: id, createdBy: req.user._id });
+    if (!store) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
+    }
+
+    let newStoreOffer = new StoreOffer({ offer, createdBy: req.user._id, storeId: id });
+    newStoreOffer = await newStoreOffer.save();
+
+    await broadcastOfferNotification(store, 1);
+
+    res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: newStoreOffer });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('createStoreOffer', error, req, res);
+  }
 };
 
 export const deleteStoreOffer = async (req, res) => {
-    try {
-        const { store, offer } = req.params;
+  try {
+    const { store, offer } = req.params;
 
-        const findOffer = await StoreOffer.findOne({ _id: offer, storeId: store, createdBy: req.user._id });
-        if (!findOffer) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store Offer not found" });
-        }
-
-        await StoreOffer.findByIdAndDelete(findOffer._id);
-
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('deleteStoreOffer', error, req, res);
+    const findOffer = await StoreOffer.findOne({ _id: offer, storeId: store, createdBy: req.user._id });
+    if (!findOffer) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store Offer not found" });
     }
+
+    await StoreOffer.findByIdAndDelete(findOffer._id);
+
+    res.status(status.OK).json({ status: jsonStatus.OK, success: true });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('deleteStoreOffer', error, req, res);
+  }
 };
 
 export const createOffers = async (req, res) => {
-    try {
-        const { storeId, offers } = req.body; // Accepting an array of offers
+  try {
+    const { storeId, offers } = req.body; // Accepting an array of offers
 
-        // Validation: Ensure required fields are present
-        if (!storeId || !Array.isArray(offers) || offers.length === 0) {
-            return res.status(400).json({ success: false, message: 'storeId and at least one offer are required.' });
-        }
-
-        const store = await Store.findById(storeId);
-        if (!store) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
-        }
-
-        // Array to store new offers
-        let newOffers = [];
-
-        for (let offer of offers) {
-            const { offerType, discountValue, minOrderValue, selectedProducts, title } = offer;
-
-            // Validate offerType
-            if (!offerType) {
-                return res.status(400).json({ success: false, message: 'offerType is required for all offers.' });
-            }
-
-            // Validation: If offerType is 'buy_one_get_one', selectedProducts must be provided
-            if (offerType === 'buy_one_get_one' && (!selectedProducts || selectedProducts.length === 0)) {
-                return res.status(400).json({ success: false, message: 'For Buy One Get One, selectedProducts is required.' });
-            }
-
-            // Validation: If offerType is percentage or flat discount, discountValue must be provided
-            if ((offerType === 'percentage_discount' || offerType === 'flat_discount') && (discountValue === undefined || discountValue <= 0)) {
-                return res.status(400).json({ success: false, message: 'Discount value must be greater than 0 for discount offers.' });
-            }
-
-            // Creating offer object
-            newOffers.push({
-                storeId,
-                createdBy: req.user._id,
-                offerType,
-                discountValue: offerType === 'buy_one_get_one' ? null : discountValue, // No discount value for BOGO
-                minOrderValue: minOrderValue || 0, // Default to 0
-                selectedProducts: offerType === 'buy_one_get_one' ? selectedProducts : [], // Only include products for BOGO
-                title: title || ''
-            });
-        }
-
-        // Bulk insert into MongoDB
-        const savedOffers = await StoreOffer.insertMany(newOffers);
-
-        await broadcastOfferNotification(store, savedOffers.length);
-
-        res.status(201).json({
-            success: true,
-            message: `${savedOffers.length} offers created successfully`,
-            data: savedOffers
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-        return catchError('createOffers', error, req, res);
+    // Validation: Ensure required fields are present
+    if (!storeId || !Array.isArray(offers) || offers.length === 0) {
+      return res.status(400).json({ success: false, message: 'storeId and at least one offer are required.' });
     }
+
+    const store = await Store.findById(storeId);
+    if (!store) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
+    }
+
+    // Array to store new offers
+    let newOffers = [];
+
+    for (let offer of offers) {
+      const { offerType, discountValue, minOrderValue, selectedProducts, title } = offer;
+
+      // Validate offerType
+      if (!offerType) {
+        return res.status(400).json({ success: false, message: 'offerType is required for all offers.' });
+      }
+
+      // Validation: If offerType is 'buy_one_get_one', selectedProducts must be provided
+      if (offerType === 'buy_one_get_one' && (!selectedProducts || selectedProducts.length === 0)) {
+        return res.status(400).json({ success: false, message: 'For Buy One Get One, selectedProducts is required.' });
+      }
+
+      // Validation: If offerType is percentage or flat discount, discountValue must be provided
+      if ((offerType === 'percentage_discount' || offerType === 'flat_discount') && (discountValue === undefined || discountValue <= 0)) {
+        return res.status(400).json({ success: false, message: 'Discount value must be greater than 0 for discount offers.' });
+      }
+
+      // Creating offer object
+      newOffers.push({
+        storeId,
+        createdBy: req.user._id,
+        offerType,
+        discountValue: offerType === 'buy_one_get_one' ? null : discountValue, // No discount value for BOGO
+        minOrderValue: minOrderValue || 0, // Default to 0
+        selectedProducts: offerType === 'buy_one_get_one' ? selectedProducts : [], // Only include products for BOGO
+        title: title || ''
+      });
+    }
+
+    // Bulk insert into MongoDB
+    const savedOffers = await StoreOffer.insertMany(newOffers);
+
+    await broadcastOfferNotification(store, savedOffers.length);
+
+    res.status(201).json({
+      success: true,
+      message: `${savedOffers.length} offers created successfully`,
+      data: savedOffers
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+    return catchError('createOffers', error, req, res);
+  }
 };
 
 export const saveAllPopularProducts = async (req, res) => {
-    try {
-        const { productIds, storeId } = req.body;
+  try {
+    const { productIds, storeId } = req.body;
 
-        // 🧩 1️⃣ Validate Input
-        if (!Array.isArray(productIds) || !storeId) {
-            return res.status(400).json({
-                status: jsonStatus.BadRequest,
-                success: false,
-                message: "Please provide a valid array of Product IDs and a Store ID."
-            });
-        }
-
-        // 🧩 2️⃣ Validate Store Ownership
-        const store = await Store.findOne({ _id: storeId, createdBy: req.user._id });
-        if (!store) {
-            return res.status(status.NotFound).json({
-                status: jsonStatus.NotFound,
-                success: false,
-                message: "Store not found or does not belong to you."
-            });
-        }
-
-        // 🧩 3️⃣ Check if all products belong to this store
-        const products = await Product.find({
-            _id: { $in: productIds },
-            storeId: storeId, // ✅ Matching by store instead of createdBy
-        });
-
-        if (products.length !== productIds.length) {
-            return res.status(404).json({
-                status: jsonStatus.NotFound,
-                success: false,
-                message: "Some products were not found in this store."
-            });
-        }
-
-        // 🧩 4️⃣ Remove old popular products for this store
-        await StorePopularProduct.deleteMany({ storeId, createdBy: req.user._id });
-
-        // 🧩 5️⃣ Create new popular product documents
-        const popularProductDocs = productIds.map(productId => ({
-            productId,
-            storeId,
-            createdBy: req.user._id
-        }));
-
-        // 🧩 6️⃣ Insert new ones
-        const insertedPopularProducts = await StorePopularProduct.insertMany(popularProductDocs);
-
-        // 🧩 7️⃣ Respond with success
-        res.status(status.Create).json({
-            status: jsonStatus.Create,
-            success: true,
-            message: "Popular products saved successfully.",
-            data: insertedPopularProducts
-        });
-
-    } catch (error) {
-        // 🧩 8️⃣ Catch and log errors
-        console.error("Error in saveAllPopularProducts:", error);
-        res.status(status.InternalServerError).json({
-            status: jsonStatus.InternalServerError,
-            success: false,
-            message: error.message
-        });
-        return catchError('saveAllPopularProducts', error, req, res);
+    // 🧩 1️⃣ Validate Input
+    if (!Array.isArray(productIds) || !storeId) {
+      return res.status(400).json({
+        status: jsonStatus.BadRequest,
+        success: false,
+        message: "Please provide a valid array of Product IDs and a Store ID."
+      });
     }
+
+    // 🧩 2️⃣ Validate Store Ownership
+    const store = await Store.findOne({ _id: storeId, createdBy: req.user._id });
+    if (!store) {
+      return res.status(status.NotFound).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Store not found or does not belong to you."
+      });
+    }
+
+    // 🧩 3️⃣ Check if all products belong to this store
+    const products = await Product.find({
+      _id: { $in: productIds },
+      storeId: storeId, // ✅ Matching by store instead of createdBy
+    });
+
+    if (products.length !== productIds.length) {
+      return res.status(404).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Some products were not found in this store."
+      });
+    }
+
+    // 🧩 4️⃣ Remove old popular products for this store
+    await StorePopularProduct.deleteMany({ storeId, createdBy: req.user._id });
+
+    // 🧩 5️⃣ Create new popular product documents
+    const popularProductDocs = productIds.map(productId => ({
+      productId,
+      storeId,
+      createdBy: req.user._id
+    }));
+
+    // 🧩 6️⃣ Insert new ones
+    const insertedPopularProducts = await StorePopularProduct.insertMany(popularProductDocs);
+
+    // 🧩 7️⃣ Respond with success
+    res.status(status.Create).json({
+      status: jsonStatus.Create,
+      success: true,
+      message: "Popular products saved successfully.",
+      data: insertedPopularProducts
+    });
+
+  } catch (error) {
+    // 🧩 8️⃣ Catch and log errors
+    console.error("Error in saveAllPopularProducts:", error);
+    res.status(status.InternalServerError).json({
+      status: jsonStatus.InternalServerError,
+      success: false,
+      message: error.message
+    });
+    return catchError('saveAllPopularProducts', error, req, res);
+  }
 };
 
 export const createPopularProduct = async (req, res) => {
-    try {
-        const { productId, storeId } = req.body;
+  try {
+    const { productId, storeId } = req.body;
 
-        if (!productId || !storeId) {
-            return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Please enter Product ID and Store ID" });
-        }
-
-        const store = await Store.findOne({ _id: storeId, createdBy: req.user._id });
-        if (!store) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
-        }
-
-        const product = await Product.findOne({ _id: productId, createdBy: req.user._id });
-        if (!product) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Product not found" });
-        }
-
-        const popularProductFind = await StorePopularProduct.findOne({ productId, storeId, createdBy: req.user._id });
-        if (popularProductFind) {
-            return res.status(status.ResourceExist).json({ status: jsonStatus.ResourceExist, success: false, message: "Popular product already added" });
-        }
-
-        let newPopularProduct = new StorePopularProduct({ productId, storeId, createdBy: req.user._id });
-        newPopularProduct = await newPopularProduct.save();
-
-        res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: newPopularProduct });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('createPopularProduct', error, req, res);
+    if (!productId || !storeId) {
+      return res.status(status.BadRequest).json({ status: jsonStatus.BadRequest, success: false, message: "Please enter Product ID and Store ID" });
     }
+
+    const store = await Store.findOne({ _id: storeId, createdBy: req.user._id });
+    if (!store) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Store not found" });
+    }
+
+    const product = await Product.findOne({ _id: productId, createdBy: req.user._id });
+    if (!product) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Product not found" });
+    }
+
+    const popularProductFind = await StorePopularProduct.findOne({ productId, storeId, createdBy: req.user._id });
+    if (popularProductFind) {
+      return res.status(status.ResourceExist).json({ status: jsonStatus.ResourceExist, success: false, message: "Popular product already added" });
+    }
+
+    let newPopularProduct = new StorePopularProduct({ productId, storeId, createdBy: req.user._id });
+    newPopularProduct = await newPopularProduct.save();
+
+    res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: newPopularProduct });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('createPopularProduct', error, req, res);
+  }
 };
 
 export const deleteStoreSelectedOffer = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        const findOffer = await StoreOffer.findOne({ createdBy: req.user._id, _id: id });
-        if (!findOffer) {
-            return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Offer not found" });
-        }
-
-        findOffer.deleted = true;
-        await findOffer.save();
-
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('deleteStoreSelectedOffer', error, req, res);
+    const findOffer = await StoreOffer.findOne({ createdBy: req.user._id, _id: id });
+    if (!findOffer) {
+      return res.status(status.NotFound).json({ status: jsonStatus.NotFound, success: false, message: "Offer not found" });
     }
+
+    findOffer.deleted = true;
+    await findOffer.save();
+
+    res.status(status.OK).json({ status: jsonStatus.OK, success: true });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('deleteStoreSelectedOffer', error, req, res);
+  }
 };
 
 export const deletePopularProduct = async (req, res) => {
-    try {
-        const { store, id } = req.params;
+  try {
+    const { store, id } = req.params;
 
-        const storeDetails = await Store.findOne({ _id: store, createdBy: req.user._id });
-        if (!storeDetails) {
-            return res.status(status.NotFound).json({
-                status: jsonStatus.NotFound,
-                success: false,
-                message: "Store not found"
-            });
-        }
-
-        // In seller panel we pass the productId in :id param.
-        // So delete by (storeId + productId + createdBy) instead of by document _id.
-        const findPopProduct = await StorePopularProduct.findOne({
-            storeId: storeDetails._id,
-            productId: id,
-            createdBy: req.user._id
-        });
-        if (!findPopProduct) {
-            return res.status(status.NotFound).json({
-                status: jsonStatus.NotFound,
-                success: false,
-                message: "Popular product not found with this ID"
-            });
-        }
-
-        await StorePopularProduct.findByIdAndDelete(findPopProduct._id);
-
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('deletePopularProduct', error, req, res);
+    const storeDetails = await Store.findOne({ _id: store, createdBy: req.user._id });
+    if (!storeDetails) {
+      return res.status(status.NotFound).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Store not found"
+      });
     }
+
+    // In seller panel we pass the productId in :id param.
+    // So delete by (storeId + productId + createdBy) instead of by document _id.
+    const findPopProduct = await StorePopularProduct.findOne({
+      storeId: storeDetails._id,
+      productId: id,
+      createdBy: req.user._id
+    });
+    if (!findPopProduct) {
+      return res.status(status.NotFound).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Popular product not found with this ID"
+      });
+    }
+
+    await StorePopularProduct.findByIdAndDelete(findPopProduct._id);
+
+    res.status(status.OK).json({ status: jsonStatus.OK, success: true });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('deletePopularProduct', error, req, res);
+  }
 };
 
 /**
@@ -1738,123 +1750,123 @@ export const deletePopularProduct = async (req, res) => {
  * @access  Private (Retailer)
  */
 export const shareRetailerStore = async (req, res) => {
-    try {
-        const store = await Store.findOne({ createdBy: req.user._id })
-            .populate("category", "name")
-            .lean();
+  try {
+    const store = await Store.findOne({ createdBy: req.user._id })
+      .populate("category", "name")
+      .lean();
 
-        if (!store) {
-            return res.status(status.NotFound).json({
-                status: jsonStatus.NotFound,
-                success: false,
-                message: "Store not found"
-            });
-        }
-
-        // Build share URL (using store ID)
-        const shareBaseUrl = process.env.STORE_SHARE_BASE_URL || 
-            (req?.protocol && req?.get ? `${req.protocol}://${req.get("host")}/store` : "https://orsolum.com/store");
-        const shareUrl = `${shareBaseUrl}/${store._id}`;
-
-        // Build preview image URL
-        const cdn = process.env.CDN_BASE_URL || process.env.AWS_CDN_BASE_URL || "";
-        const previewImage = store.coverImage 
-            ? (store.coverImage.startsWith("http") ? store.coverImage : `${cdn}/${store.coverImage}`)
-            : "https://cdn.orsolum.com/static/default-store.png";
-
-        // Format location
-        const location = store.address || "";
-        const cityState = store.shiprocket?.pickup_location 
-            ? [store.shiprocket.pickup_location.city, store.shiprocket.pickup_location.state]
-                .filter(Boolean)
-                .join(", ")
-            : "";
-
-        // Build share message with proper formatting
-        const shareMessage = [
-            `🏪 ${store.name || "Store"}`,
-            store.category?.name ? `📂 Category: ${store.category.name}` : null,
-            location ? `📍 Address: ${location}` : null,
-            cityState ? `🗺️ Location: ${cityState}` : null,
-            store.phone ? `📞 Contact: ${store.phone}` : null,
-            store.email ? `✉️ Email: ${store.email}` : null,
-            store.information ? `ℹ️ About: ${store.information}` : null,
-            `🔗 View Store: ${shareUrl}`
-        ]
-            .filter(Boolean)
-            .join("\n\n");
-
-        res.status(status.OK).json({
-            status: jsonStatus.OK,
-            success: true,
-            data: {
-                store: {
-                    _id: store._id,
-                    name: store.name,
-                    category: store.category?.name || null,
-                    information: store.information,
-                    phone: store.phone,
-                    address: store.address,
-                    email: store.email,
-                    coverImage: store.coverImage,
-                    images: store.images || [],
-                    rating: store.rating || 0,
-                    ratingCount: store.ratingCount || 0,
-                },
-                share: {
-                    url: shareUrl,
-                    message: shareMessage,
-                    previewImage,
-                    meta: {
-                        title: `${store.name || "Store"} • Orsolum`,
-                        description: store.information || `Visit ${store.name || "this store"} on Orsolum`,
-                        previewImage
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        res.status(status.InternalServerError).json({
-            status: jsonStatus.InternalServerError,
-            success: false,
-            message: error.message
-        });
-        return catchError('shareRetailerStore', error, req, res);
+    if (!store) {
+      return res.status(status.NotFound).json({
+        status: jsonStatus.NotFound,
+        success: false,
+        message: "Store not found"
+      });
     }
+
+    // Build share URL (using store ID)
+    const shareBaseUrl = process.env.STORE_SHARE_BASE_URL ||
+      (req?.protocol && req?.get ? `${req.protocol}://${req.get("host")}/store` : "https://orsolum.com/store");
+    const shareUrl = `${shareBaseUrl}/${store._id}`;
+
+    // Build preview image URL
+    const cdn = process.env.CDN_BASE_URL || process.env.AWS_CDN_BASE_URL || "";
+    const previewImage = store.coverImage
+      ? (store.coverImage.startsWith("http") ? store.coverImage : `${cdn}/${store.coverImage}`)
+      : "https://cdn.orsolum.com/static/default-store.png";
+
+    // Format location
+    const location = store.address || "";
+    const cityState = store.shiprocket?.pickup_location
+      ? [store.shiprocket.pickup_location.city, store.shiprocket.pickup_location.state]
+        .filter(Boolean)
+        .join(", ")
+      : "";
+
+    // Build share message with proper formatting
+    const shareMessage = [
+      `🏪 ${store.name || "Store"}`,
+      store.category?.name ? `📂 Category: ${store.category.name}` : null,
+      location ? `📍 Address: ${location}` : null,
+      cityState ? `🗺️ Location: ${cityState}` : null,
+      store.phone ? `📞 Contact: ${store.phone}` : null,
+      store.email ? `✉️ Email: ${store.email}` : null,
+      store.information ? `ℹ️ About: ${store.information}` : null,
+      `🔗 View Store: ${shareUrl}`
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    res.status(status.OK).json({
+      status: jsonStatus.OK,
+      success: true,
+      data: {
+        store: {
+          _id: store._id,
+          name: store.name,
+          category: store.category?.name || null,
+          information: store.information,
+          phone: store.phone,
+          address: store.address,
+          email: store.email,
+          coverImage: store.coverImage,
+          images: store.images || [],
+          rating: store.rating || 0,
+          ratingCount: store.ratingCount || 0,
+        },
+        share: {
+          url: shareUrl,
+          message: shareMessage,
+          previewImage,
+          meta: {
+            title: `${store.name || "Store"} • Orsolum`,
+            description: store.information || `Visit ${store.name || "this store"} on Orsolum`,
+            previewImage
+          }
+        }
+      }
+    });
+  } catch (error) {
+    res.status(status.InternalServerError).json({
+      status: jsonStatus.InternalServerError,
+      success: false,
+      message: error.message
+    });
+    return catchError('shareRetailerStore', error, req, res);
+  }
 };
 
 export const searchPopularProduct = async (req, res) => {
-    try {
-        const { search } = req.query;
-        let { skip } = req.query;
-        skip = skip || 1;
+  try {
+    const { search } = req.query;
+    let { skip } = req.query;
+    skip = skip || 1;
 
-        const list = await Product.aggregate([
-            {
-                $match: {
-                    deleted: false,
-                    createdBy: new ObjectId(req.user._id),
-                    productName: {
-                        $regex: search, $options: 'i'
-                    }
-                }
-            },
-            {
-                $sort: {
-                    createdAt: -1
-                }
-            },
-            {
-                $skip: (Number(skip) - 1) * limit
-            },
-            {
-                $limit: limit
-            }
-        ]);
+    const list = await Product.aggregate([
+      {
+        $match: {
+          deleted: false,
+          createdBy: new ObjectId(req.user._id),
+          productName: {
+            $regex: search, $options: 'i'
+          }
+        }
+      },
+      {
+        $sort: {
+          createdAt: -1
+        }
+      },
+      {
+        $skip: (Number(skip) - 1) * limit
+      },
+      {
+        $limit: limit
+      }
+    ]);
 
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: list });
-    } catch (error) {
-        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
-        return catchError('searchPopularProduct', error, req, res);
-    }
+    res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: list });
+  } catch (error) {
+    res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+    return catchError('searchPopularProduct', error, req, res);
+  }
 };

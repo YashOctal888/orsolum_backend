@@ -3,6 +3,8 @@ import { catchError } from '../helper/service.js';
 import User from '../models/User.js';
 import OtpModel from '../models/Otp.js';
 import PremiumMembership from '../models/PremiumMembership.js';
+import Store from '../models/Store.js';
+import Product from '../models/Product.js';
 import { generateToken } from '../helper/generateToken.js';
 import { signedUrl } from '../helper/s3.config.js';
 import OTP_GENERATOR from "otp-generator";
@@ -206,7 +208,20 @@ export const registerUser = async (req, res) => {
 
         const token = generateToken(user._id);
 
-        res.status(status.Create).json({ status: jsonStatus.Create, success: true, data: user, token });
+
+
+        res.status(status.Create).json({
+            status: jsonStatus.Create,
+            success: true,
+            data: user,
+            token,
+            onboarding: {
+                hasStore: false,
+                storeStatus: null,
+                hasProduct: false,
+                onboardingCompleted: false
+            }
+        });
     } catch (error) {
         res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
         return catchError('registerUser', error, req, res);
@@ -247,7 +262,39 @@ export const loginUser = async (req, res) => {
 
         const token = generateToken(user._id);
 
-        res.status(status.OK).json({ status: jsonStatus.OK, success: true, data: user, token });
+
+
+        // Check onboarding status
+        let hasStore = false;
+        let storeStatus = null;
+        let hasProduct = false;
+
+        const store = await Store.findOne({ createdBy: user._id });
+        if (store) {
+            hasStore = true;
+            storeStatus = store.status; // 'P', 'A', 'R'
+
+            // Check for products
+            const productCount = await Product.countDocuments({ storeId: store._id, deleted: false });
+            if (productCount > 0) {
+                hasProduct = true;
+            }
+        }
+
+        const onboardingCompleted = hasStore && storeStatus !== 'R' && hasProduct;
+
+        res.status(status.OK).json({
+            status: jsonStatus.OK,
+            success: true,
+            data: user,
+            token,
+            onboarding: {
+                hasStore,
+                storeStatus,
+                hasProduct,
+                onboardingCompleted
+            }
+        });
     } catch (error) {
         res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
         return catchError('loginUser', error, req, res);
@@ -258,7 +305,7 @@ export const getMyProfile = async (req, res) => {
     try {
         // Get coin statistics
         const coinStats = await getUserCoinStats(req.user._id);
-        
+
         const userData = {
             ...req.user.toObject(),
             coins: coinStats
@@ -275,7 +322,7 @@ export const getMyProfile = async (req, res) => {
 export const getMyCoins = async (req, res) => {
     try {
         const coinStats = await getUserCoinStats(req.user._id);
-        
+
         res.status(status.OK).json({
             status: jsonStatus.OK,
             success: true,
@@ -296,7 +343,7 @@ export const getMyCoinHistory = async (req, res) => {
     try {
         const { skip = 1, limit: limitParam = 10, type } = req.query;
         const userId = req.user._id;
-        
+
         const limit = Number(limitParam) || 10;
         const skipValue = (Number(skip) - 1) * limit;
 

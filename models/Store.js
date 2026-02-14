@@ -8,8 +8,13 @@ const StoreSchema = new mongoose.Schema({
     },
     category: {
         type: ObjectId,
-        ref: 'store_category',
+        ref: 'product_category',
         required: true
+    },
+    subCategory: {
+        type: ObjectId,
+        ref: 'product_sub_category',
+        default: null
     },
     information: {
         type: String,
@@ -62,7 +67,7 @@ const StoreSchema = new mongoose.Schema({
         }
     },
     shiprocket: {
-        pickup_address_id: { type: String }, 
+        pickup_address_id: { type: String },
         pickup_location: {
             name: { type: String },
             phone: { type: String },
@@ -100,7 +105,7 @@ const StoreSchema = new mongoose.Schema({
     onboardingCompleted: {
         type: Boolean,
         default: false,
-      },
+    },
     platformFee: { type: Number, default: null }, // per-store override; falls back to env PLATFORM_FEE
     perOrderShippingFee: { type: Number, default: null }, // per-order shipping fee (overrides default logic if set)
     freeShippingThreshold: { type: Number, default: 500 }, // Free shipping above this amount

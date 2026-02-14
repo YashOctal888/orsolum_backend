@@ -69,7 +69,7 @@ const superadminRouter = express.Router();
 
 // Superadmin Authentication
 superadminRouter.post('/login/superadmin/v1', loginSuperadmin);
-superadminRouter.get('/superadmin/me/v1',superadminAuthentication,me)
+superadminRouter.get('/superadmin/me/v1', superadminAuthentication, me)
 
 // Role and Permissions
 superadminRouter.get("/superadmin/staff-members", superadminAuthentication, staffMembers);
@@ -78,7 +78,7 @@ superadminRouter.get("/superadmin/roles", superadminAuthentication, RolePermissi
 superadminRouter.get("/superadmin/role/:id", superadminAuthentication, RolePermissionController.getRoleById);
 superadminRouter.post("/superadmin/role/create", superadminAuthentication, RolePermissionController.createRole)
 superadminRouter.put("/superadmin/role/:id", superadminAuthentication, RolePermissionController.updateRole);
-superadminRouter.delete("/superadmin/roles/:id",superadminAuthentication, RolePermissionController.deleteRole);
+superadminRouter.delete("/superadmin/roles/:id", superadminAuthentication, RolePermissionController.deleteRole);
 superadminRouter.get("/superadmin/permissions", superadminAuthentication, RolePermissionController.permissions)
 
 
@@ -97,6 +97,12 @@ superadminRouter.get('/superadmin/list/store/category/v1', superadminAuthenticat
 superadminRouter.post('/superadmin/create/store/category/v1', superadminAuthentication, CategoryController.store);
 superadminRouter.put('/superadmin/edit/store/category/:id/v1', superadminAuthentication, CategoryController.update);
 superadminRouter.delete('/superadmin/delete/store/category/:id/v1', superadminAuthentication, CategoryController.destroy);
+
+// Sub-Category Management
+superadminRouter.get('/superadmin/list/store/sub-categories/:categoryId/v1', superadminAuthentication, CategoryController.listSubCategories);
+superadminRouter.post('/superadmin/create/store/sub-category/v1', superadminAuthentication, CategoryController.storeSubCategory);
+superadminRouter.put('/superadmin/edit/store/sub-category/:id/v1', superadminAuthentication, CategoryController.updateSubCategory);
+superadminRouter.delete('/superadmin/delete/store/sub-category/:id/v1', superadminAuthentication, CategoryController.destroySubCategory);
 
 // Store Management
 superadminRouter.get('/superadmin/list/store/v1', superadminAuthentication, listStores);

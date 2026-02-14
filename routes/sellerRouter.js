@@ -2,8 +2,8 @@ import express from "express";
 import { sellerAuthentication } from "../middlewares/middleware.js";
 import { uploadAdMediaAny, uploadAdMediaMulter, uploadStoreImagesMulter, uploadUserImage } from "../helper/uploadImage.js";
 import { createSellerStore, updateStoreObjectives, updateStoreLicense, getSellerStoreDetails, updateSellerStore } from "../controllers/sellerStoreController.js";
-import { listOfCategories, deleteStoreImage } from "../controllers/storeController.js";
-import { 
+import { listOfCategories, deleteStoreImage, listSubCategoriesByCategoryId } from "../controllers/storeController.js";
+import {
   sendRegisterOtp,
   verifyRegisterOtp,
   updateSellerProfile,
@@ -33,7 +33,7 @@ sellerRouter.post("/seller/send/register/otp/v1", sendRegisterOtp);
 sellerRouter.post("/seller/verify/register/otp/v1", verifyRegisterOtp);
 sellerRouter.put("/seller/update/profile/v1", sellerAuthentication, uploadUserImage.single('image'), updateSellerProfile);
 sellerRouter.post("/seller/login/v1", loginSeller);
-sellerRouter.post("/seller/set/password/v1", setSellerPassword); 
+sellerRouter.post("/seller/set/password/v1", setSellerPassword);
 sellerRouter.post("/seller/verify/password/v1", verifySellerPassword);
 sellerRouter.get("/seller/profile/details/v1", sellerAuthentication, getSellerProfile);
 
@@ -88,6 +88,7 @@ sellerRouter.put(
 
 // 📋 Seller store categories
 sellerRouter.get("/seller/categories/list/v1", sellerAuthentication, listOfCategories);
+sellerRouter.get("/seller/categories/sub-categories/:categoryId/v1", sellerAuthentication, listSubCategoriesByCategoryId);
 
 // 🎯 Update Store Objectives
 sellerRouter.put("/seller/store/objectives/v1", sellerAuthentication, updateStoreObjectives);
