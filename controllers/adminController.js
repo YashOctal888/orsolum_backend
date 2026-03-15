@@ -26,6 +26,7 @@ import AppSettings from '../models/AppSettings.js';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import { signedUrl } from '../helper/s3.config.js';
+// import { uploadToS3 } from '../helper/s3Uploader.js';
 import axios from 'axios';
 import ShiprocketService from '../helper/shiprocketService.js';
 import { processGoogleMapsLink } from '../helper/latAndLong.js';
@@ -2752,42 +2753,9 @@ export const updateAppThemeSettings = async (req, res) => {
 // Upload theme media (images/videos) for app theme settings
 export const uploadThemeMedia = async (req, res) => {
     try {
-        const files = req.files || [];
-
-        if (!Array.isArray(files) || files.length === 0) {
-            return res.status(status.BadRequest).json({
-                status: jsonStatus.BadRequest,
-                success: false,
-                message: "No file uploaded",
-            });
-        }
-
-        // Prefer video if present, otherwise first file
-        const videoFile = files.find(f => f.mimetype?.startsWith("video/"));
-        const chosenFile = videoFile || files[0];
-
-        const url = chosenFile.location || chosenFile.key;
-
-        if (!url) {
-            return res.status(status.BadRequest).json({
-                status: jsonStatus.BadRequest,
-                success: false,
-                message: "Failed to get uploaded file URL",
-            });
-        }
-
-        return res.status(status.OK).json({
-            status: jsonStatus.OK,
-            success: true,
-            data: { url },
-        });
+        signedUrl(req, res, 'theme_setting/')
     } catch (error) {
-        console.error("uploadThemeMedia error:", error);
-        res.status(status.InternalServerError).json({
-            status: jsonStatus.InternalServerError,
-            success: false,
-            message: error.message,
-        });
-        return catchError("uploadThemeMedia", error, req, res);
+        res.status(status.InternalServerError).json({ status: jsonStatus.InternalServerError, success: false, message: error.message });
+        return catchError('uploadThemeSettingImage', error, req, res);
     }
 };

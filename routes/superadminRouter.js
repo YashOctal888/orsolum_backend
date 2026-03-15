@@ -59,11 +59,21 @@ import {
   me,
   staffMembers,
   createStaffMember,
+  editStaffMember,
   getPaymentConfigurations,
   savePaymentConfigurations
 } from "../controllers/superadminController.js";
 import RolePermissionController from "../controllers/RolePermissionController.js";
 import CategoryController from "../controllers/CategoryController.js";
+import PosterController from "../controllers/ThemeControllers/posterController.js";
+import { upload } from "../helper/s3Uploader.js";
+import {
+  CategoryController as ThemeCategoryController,
+  CampaignController,
+  TrendingController,
+  PromotionController
+} from "../controllers/ThemeControllers/homeThemeController.js"
+
 const superadminRouter = express.Router();
 
 
@@ -74,6 +84,7 @@ superadminRouter.get('/superadmin/me/v1', superadminAuthentication, me)
 // Role and Permissions
 superadminRouter.get("/superadmin/staff-members", superadminAuthentication, staffMembers);
 superadminRouter.post("/superadmin/create/staff-member", superadminAuthentication, createStaffMember);
+superadminRouter.put("/superadmin/edit/staff-member/:id",superadminAuthentication, editStaffMember);
 superadminRouter.get("/superadmin/roles", superadminAuthentication, RolePermissionController.roles)
 superadminRouter.get("/superadmin/role/:id", superadminAuthentication, RolePermissionController.getRoleById);
 superadminRouter.post("/superadmin/role/create", superadminAuthentication, RolePermissionController.createRole)
@@ -177,6 +188,38 @@ superadminRouter.delete('/superadmin/welcome-image/v1', superadminAuthentication
 
 // Popular Products
 superadminRouter.post('/superadmin/store/:storeId/popular-products/v1', superadminAuthentication, saveStorePopularProducts);
+
+// Theme Setting
+superadminRouter.get('/superadmin/theme/poster', superadminAuthentication, PosterController.index);
+superadminRouter.post('/superadmin/theme/poster', superadminAuthentication, upload.single("poster"), PosterController.create);
+
+// ==========================================
+// 1. Category Themes Routes
+// ==========================================
+superadminRouter.get("/superadmin/home-themes/categories", ThemeCategoryController.index);
+superadminRouter.post("/superadmin/home-themes/categories", upload.single("gif"), ThemeCategoryController.create);
+superadminRouter.delete("/superadmin/home-themes/categories/:id", ThemeCategoryController.delete);
+
+// ==========================================
+// 2. Trending Posters Routes
+// ==========================================
+superadminRouter.get("/superadmin/home-themes/trending-posters", TrendingController.index);
+superadminRouter.post("/superadmin/home-themes/trending-posters", TrendingController.create);
+superadminRouter.delete("/superadmin/home-themes/trending-posters/:id", TrendingController.delete);
+
+// ==========================================
+// 3. Promotion Posters Routes
+// ==========================================
+superadminRouter.get("/superadmin/home-themes/promotions", PromotionController.index);
+superadminRouter.post("/superadmin/home-themes/promotions", upload.single("image"), PromotionController.create);
+superadminRouter.delete("/superadmin/home-themes/promotions/:id", PromotionController.delete);
+
+// ==========================================
+// 4. Featured Campaigns Routes
+// ==========================================
+superadminRouter.get("/superadmin/home-themes/campaigns", CampaignController.index);
+superadminRouter.post("/superadmin/home-themes/campaigns", upload.single("image"), CampaignController.create);
+superadminRouter.delete("/superadmin/home-themes/campaigns/:id", CampaignController.delete);
 
 export default superadminRouter;
 

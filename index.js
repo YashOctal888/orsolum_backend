@@ -30,6 +30,8 @@ import pickupAddressRouter from "./routes/pickupAddressRouter.js";
 import superadminRouter from "./routes/superadminRouter.js";
 import donationRoutes from "./routes/donationRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
+import themeMobileRouter from "./routes/themeMobileRouter.js";
+import themeWebRouter from "./routes/themeWebRouter.js";
 
 import { checkPremiumExpiry, runAdsExpiryCron } from "./services.js";
 import { isSocketAuthenticated } from "./middlewares/middleware.js";
@@ -190,6 +192,8 @@ app.use("/api/pickup-addresses", pickupAddressRouter);
 app.use("/api", sellerRouter);
 app.use("/api/donation", donationRoutes);
 app.use("/api/coupon", couponRoutes);
+app.use("/api/v1/mobile/theme", themeMobileRouter);
+app.use("/api/v1/web/theme", themeWebRouter);
 
 app.post("/api/delivery/tracking/webhook", webhookTracking);
 

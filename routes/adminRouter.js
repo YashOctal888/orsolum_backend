@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { createAdmin, loginAdmin, uploadStoreCategoryImage, createStoreCategory, editStoreCategory, deleteStoreCategory, listStoreCategory, listStores, storeDetails, acceptStore, rejectStore, createStore, deleteStore, listProducts, listSellerProducts, productDetails, acceptProduct, rejectProduct, deleteLocalProduct, createCouponCode, updateCouponCode, deleteCouponCode, listCouponCode, createMembership, updateMembership, getMembershipDetails, listUsers, userDetails, inActiveUserDetails, listPayments, paymentDetails, listLocalStoreOrders, localStoreOrderDetails, listOnlineOrders, onlineOrderDetails, getOnlineReturnOrder, getReturnOrderDetails, returnAdminChangeStatus, createOffer, listOffers, updateOffer, deleteOffer, getWelcomeImage, uploadWelcomeImage, deleteWelcomeImage, saveStorePopularProducts, updateStoreRating, resetAllRatings, syncSellerProductsToOnline, fixPurseProductsCategory, getAppThemeSettings, updateAppThemeSettings, getAdminStore, upsertAdminStore, deleteAdminStore, listAdminProducts, createAdminProduct, updateAdminProduct, deleteAdminProduct, uploadThemeMedia } from "../controllers/adminController.js";
 import { listCoinConfigurations, createCoinConfiguration, updateCoinConfiguration, deleteCoinConfiguration, adminGetCoinHistory, adminGetCoinStatistics } from "../controllers/coinController.js";
 import { uploadAdMediaAny, uploadAdMediaMulter, uploadStoreImagesMulter, uploadPopularCategoryImageMulter } from "../helper/uploadImage.js";
+// import { memoryUpload } from "../helper/s3Uploader.js";
 import { adminAuthentication, userAuthentication } from "../middlewares/middleware.js";
 import { createWorkHours, getAllWorkHours, updateWorkHours, deleteWorkHours } from "../controllers/workHoursController.js";
 import ShiprocketService from '../helper/shiprocketService.js';
@@ -221,7 +222,7 @@ adminRouter.put('/admin/ads/config/v1', adminAuthentication, adminUpdateAdsConfi
 // App Theme Settings
 adminRouter.get('/admin/app/theme/settings/v1', adminAuthentication, getAppThemeSettings);
 adminRouter.put('/admin/app/theme/settings/v1', adminAuthentication, updateAppThemeSettings);
-adminRouter.post('/admin/app/theme/upload/media/v1', adminAuthentication, uploadAdMediaAny, uploadThemeMedia);
+// adminRouter.post('/admin/app/theme/upload/media/v1', adminAuthentication, memoryUpload.single("file"), uploadThemeMedia);
 
 // Coins / Loyalty Points Management
 adminRouter.get('/admin/coins/configurations/v1', adminAuthentication, listCoinConfigurations);

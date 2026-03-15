@@ -242,3 +242,84 @@ export const createStaffMember = async (req, res) => {
     });
   }
 };
+
+export const editStaffMember = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error, value } = subAdminValidate.validate(req.body, {
+            abortEarly: false,
+        });
+
+        if (error) {
+            return res.status(status.BadRequest).json({
+                status: jsonStatus.BadRequest,
+                success: false,
+                message: "Validation failed",
+                errors: error.details.map((err) => err.message),
+            });
+        }
+
+        // 1️⃣ Check staff exists
+        const existingAdmin = await Admin.findById(id);
+        if (!existingAdmin) {
+            return res.status(status.NotFound).json({
+                status: jsonStatus.NotFound,
+                success: false,
+                message: "Staff member not found",
+            });
+        }
+
+        // 2️⃣ Check email uniqueness (exclude self)
+        const emailExists = await Admin.findOne({
+            email: value.email,
+            _id: { $ne: id },
+        });
+
+        if (emailExists) {
+            return res.status(status.BadRequest).json({
+                status: jsonStatus.BadRequest,
+                success: false,
+                message: "Admin with this email already exists",
+            });
+        }
+
+        // 3️⃣ Check role exists
+        const role = await Roles.findById(value.role);
+        if (!role) {
+            return res.status(status.BadRequest).json({
+                status: jsonStatus.BadRequest,
+                success: false,
+                message: "Role not found",
+            });
+        }
+
+        // 4️⃣ Update staff
+        const updatedAdmin = await Admin.findByIdAndUpdate(
+            id,
+            {
+                name: value.name,
+                email: value.email,
+                password: value.password, // hash if required
+                role: role._id,
+            },
+            { new: true }
+        );
+
+        // 5️⃣ Success response
+        return res.status(status.OK).json({
+            status: jsonStatus.OK,
+            success: true,
+            message: "Staff member updated successfully",
+            data: updatedAdmin,
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(status.InternalServerError).json({
+            status: jsonStatus.InternalServerError,
+            success: false,
+            message: error.message || "Something went wrong",
+        });
+    }
+};
